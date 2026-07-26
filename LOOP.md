@@ -35,5 +35,6 @@ MCP connectors are not required or configured for this pattern. If a future revi
 - Spending limits: `loop-budget.md`
 - Review history: `loop-run-log.md`
 - Safety policy: `docs/safety.md`
+- Locked product requirements: `docs/mvp-spec.md`
 - Guard procedure for a separately approved L2 attempt: `.agents/skills/loop-guard/SKILL.md`
 - Attempt ledger used only during an approved L2 attempt: `loop-ledger.json`
