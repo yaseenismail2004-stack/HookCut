@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "purpose": "Manual audit records for separately human-approved L2 fix attempts only. This file does not trigger automation.",
+  "entry_schema": {
+    "item_id": "string",
+    "attempt_number": "positive integer",
+    "status": "started | passed | failed | escalated",
+    "scope": "string",
+    "started_at": "ISO 8601 timestamp",
+    "intended_verification": "string",
+    "verification_result": "string or null",
+    "note": "string or null"
+  },
+  "entries": []
+}
