@@ -2,6 +2,8 @@
 node_modules/
 .next/
 out/
+apps/*/node_modules/
+apps/web/.next/
 
 # Python and FastAPI
 __pycache__/
@@ -11,6 +13,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 venv/
+apps/api/.venv/
 
 # Local environments, API keys, and secrets
 .env
@@ -22,7 +25,7 @@ venv/
 *.pfx
 
 # Uploaded and generated media
-uploads/
+/uploads/
 uploaded-videos/
 rendered-clips/
 tmp-media/
@@ -33,6 +36,26 @@ temp-media/
 *.mkv
 *.webm
 *.gif
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/temp/*
+!storage/temp/.gitkeep
+storage/audio/*
+!storage/audio/.gitkeep
+storage/transcripts/*
+!storage/transcripts/.gitkeep
+storage/clips/*
+!storage/clips/.gitkeep
+storage/subtitles/*
+!storage/subtitles/.gitkeep
+*.srt
+*.ass
+*.sqlite
+*.sqlite3
+*.db
+work/
+outputs/
+.local/
 
 # Logs and reports
 logs/

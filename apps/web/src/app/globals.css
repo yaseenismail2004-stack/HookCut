@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  --surface: #f7f7fb;
+  --panel: #ffffff;
+  --text: #15151c;
+  --muted: #686875;
+  --line: #e6e6ed;
+  --accent: #7c3aed;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #0b0b10;
+    --panel: #14141c;
+    --text: #f5f3ff;
+    --muted: #aaa8b8;
+    --line: #292936;
+    --accent: #a78bfa;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--surface);
+  color: var(--text);
+  font-family: Arial, Tahoma, "Segoe UI", sans-serif;
+}
+
+button { font: inherit; }

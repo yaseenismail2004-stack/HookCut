@@ -1,0 +1,1 @@
+"""HookCut API foundation."""
