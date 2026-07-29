@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import NonNegativeFloat, PositiveFloat, PositiveInt
+from pydantic import NonNegativeFloat, PositiveFloat, PositiveInt, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,9 +27,36 @@ class Settings(BaseSettings):
     openai_transcription_model: str | None = None
     openai_transcription_cost_per_minute_usd: NonNegativeFloat | None = None
     openai_request_timeout_seconds: PositiveInt = 120
+    gemini_api_key: str | None = None
+    gemini_transcription_model: str = "gemini-3.6-flash"
+    gemini_transcription_cost_per_minute_usd: NonNegativeFloat | None = None
+    gemini_request_timeout_seconds: PositiveInt = 120
     worker_poll_interval_seconds: PositiveFloat = 0.5
     worker_enabled: bool = True
     database_url: str = "sqlite:///storage/hookcut.db"
+
+    @field_validator(
+        "openai_api_key",
+        "openai_transcription_model",
+        "openai_transcription_cost_per_minute_usd",
+        "gemini_api_key",
+        "gemini_transcription_cost_per_minute_usd",
+        mode="before",
+    )
+    @classmethod
+    def empty_optional_values_are_unset(cls, value: object) -> object:
+        """Allow template placeholders to remain empty until configured locally."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def empty_database_url_uses_local_default(cls, value: object) -> object:
+        """Keep the checked-in template usable without a local override."""
+        if isinstance(value, str) and not value.strip():
+            return "sqlite:///storage/hookcut.db"
+        return value
 
     @property
     def resolved_storage_root(self) -> Path:

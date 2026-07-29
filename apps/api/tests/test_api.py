@@ -20,14 +20,16 @@ def test_health_endpoint_returns_real_service_metadata(tmp_path: Path) -> None:
 
 def test_capabilities_never_return_secret_values(tmp_path: Path) -> None:
     secret = "do-not-return-this-secret"
-    settings = Settings(storage_root=str(tmp_path), openai_api_key=secret, database_url="sqlite:///private.db", worker_enabled=False)
+    settings = Settings(storage_root=str(tmp_path), openai_api_key=secret, gemini_api_key="do-not-return-this-gemini-secret", database_url="sqlite:///private.db", worker_enabled=False)
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/system/capabilities")
     assert response.status_code == 200
     payload = response.json()
     assert payload["configuration"]["openai_api_key_configured"] is True
+    assert payload["configuration"]["gemini_api_key_configured"] is True
     assert payload["configuration"]["database_configured"] is True
     assert secret not in response.text
+    assert "do-not-return-this-gemini-secret" not in response.text
     assert "private.db" not in response.text
     assert "storage_root" not in response.text
 

@@ -19,7 +19,34 @@ Append one record after each human-requested review. This file is an audit trail
 }
 ```
 
+```json
+{
+  "run_id": "2026-07-29T10:20:00+03:00",
+  "pattern": "manual-l2-environment-repair",
+  "mode": "human-approved, assisted",
+  "scope": "Recreate only the broken project-local API virtual environment using the verified existing Python 3.12 interpreter.",
+  "intended_verification": "project virtual environment Python and pip versions; API imports; backend pytest",
+  "outcome": "passed",
+  "verification_result": "Project-local Python 3.12, pip, and declared API runtime and development dependencies are available."
+}
+```
+
 ## Recent Runs
+
+```json
+{
+  "run_id": "2026-07-29T09:31:00+03:00",
+  "pattern": "manual-environment-repair",
+  "mode": "L2-assisted-manual",
+  "duration_s": 60,
+  "items_found": 1,
+  "actions_taken": 1,
+  "escalations": 1,
+  "tokens_estimate": 1500,
+  "outcome": "escalated",
+  "human_request": "Restore the missing Python tooling after the explicitly requested environment-repair step."
+}
+```
 
 ```json
 {

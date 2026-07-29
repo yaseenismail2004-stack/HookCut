@@ -9,11 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from hookcut_api.config import Settings
 from hookcut_api.models import JobState, JobType, ProcessingJob, Transcript, TranscriptSegment, TranscriptWord
 from hookcut_api.schemas import JobResponse, TranscriptPartResponse, TranscriptResponse, TranscriptionJobRequest
 from hookcut_api.services.jobs import ACTIVE_STATES, active_job_for_video, source_ready
-from hookcut_api.services.transcription import TranscriptionProvider
+from hookcut_api.services.transcription import TranscriptionProviderRegistry
 
 router = APIRouter(tags=["processing"])
 
@@ -30,12 +29,8 @@ def get_db(request: Request) -> Generator[Session, None, None]:
         session.close()
 
 
-def get_settings(request: Request) -> Settings:
-    return cast(Settings, request.app.state.settings)
-
-
-def get_provider(request: Request) -> TranscriptionProvider:
-    return cast(TranscriptionProvider, request.app.state.transcription_provider)
+def get_providers(request: Request) -> TranscriptionProviderRegistry:
+    return cast(TranscriptionProviderRegistry, request.app.state.transcription_providers)
 
 
 def _job_response(job: ProcessingJob) -> JobResponse:
@@ -43,19 +38,19 @@ def _job_response(job: ProcessingJob) -> JobResponse:
 
 
 @router.post("/api/videos/{video_id}/transcription-jobs", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
-def create_transcription_job(video_id: str, payload: TranscriptionJobRequest, session: Session = Depends(get_db), provider: TranscriptionProvider = Depends(get_provider), settings: Settings = Depends(get_settings)) -> JobResponse:
+def create_transcription_job(video_id: str, payload: TranscriptionJobRequest, session: Session = Depends(get_db), providers: TranscriptionProviderRegistry = Depends(get_providers)) -> JobResponse:
     if payload.language_mode not in {"auto", "ar", "en"}:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_language_mode", "Choose automatic, Arabic, or English.")
-    if payload.provider != "openai":
+    provider = providers.get(payload.provider)
+    if provider is None:
         raise _error(status.HTTP_422_UNPROCESSABLE_ENTITY, "provider_not_configured", "The requested transcription provider is unavailable.")
     if not provider.is_configured():
-        code = "provider_not_configured" if not settings.openai_api_key else "transcription_model_not_configured"
-        raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, code, "OpenAI transcription is not configured.")
+        raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "provider_not_configured", "The selected transcription provider is not configured.")
     if source_ready(session, video_id) is None:
         raise _error(status.HTTP_409_CONFLICT, "source_not_ready", "The source video is not ready for transcription.")
     if active_job_for_video(session, video_id) is not None:
         raise _error(status.HTTP_409_CONFLICT, "duplicate_active_job", "An active transcription job already exists for this video.")
-    job = ProcessingJob(id=str(uuid4()), video_id=video_id, job_type=JobType.TRANSCRIPTION, state=JobState.QUEUED, progress_percent=0, current_stage="queued", language_mode=payload.language_mode, transcription_provider="openai", transcription_model=settings.openai_transcription_model, retry_count=0, max_retries=1, cancellation_requested=False, cost_approved=payload.approve_estimated_cost)
+    job = ProcessingJob(id=str(uuid4()), video_id=video_id, job_type=JobType.TRANSCRIPTION, state=JobState.QUEUED, progress_percent=0, current_stage="queued", language_mode=payload.language_mode, transcription_provider=payload.provider, transcription_model=provider.model_name, retry_count=0, max_retries=1, cancellation_requested=False, cost_approved=payload.approve_estimated_cost)
     session.add(job); session.commit(); session.refresh(job)
     return _job_response(job)
 

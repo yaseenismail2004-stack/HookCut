@@ -1,6 +1,6 @@
 # HookCut
 
-HookCut is a local-first Windows AI UGC clipper. Phase 3 adds durable local transcription jobs, FFmpeg audio extraction, a server-side OpenAI provider abstraction, cost approval, and timestamped transcript storage. It does not select clips, render, burn subtitles, import YouTube, track faces, or authenticate users.
+HookCut is a local-first Windows AI UGC clipper. Phase 3 adds durable local transcription jobs, FFmpeg audio extraction, a server-side Gemini-first provider abstraction with optional OpenAI, cost approval, and timestamped transcript storage. It does not select clips, render, burn subtitles, import YouTube, track faces, or authenticate users.
 
 ## Windows quick start
 
@@ -38,7 +38,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-dev.ps1
 
 ## Transcription setup
 
-Copy `apps/api/.env.example` to `apps/api/.env`, then set `OPENAI_API_KEY` and `OPENAI_TRANSCRIPTION_MODEL`. Optionally set `OPENAI_TRANSCRIPTION_COST_PER_MINUTE_USD` for estimates. Keep this file local and never commit it. Without both key and model the app starts normally, but transcription-job creation returns a clear configuration error.
+Copy `apps/api/.env.example` to `apps/api/.env`, then set `GEMINI_API_KEY`. `GEMINI_TRANSCRIPTION_MODEL` defaults to `gemini-2.5-flash`; set `GEMINI_TRANSCRIPTION_COST_PER_MINUTE_USD` only when you have a verified rate. Gemini is the default provider and sends the extracted temporary audio to Google for the selected job. The worker requests structured timestamped output, validates it, and confirms remote file deletion after the request. OpenAI remains optional through `OPENAI_API_KEY` and `OPENAI_TRANSCRIPTION_MODEL`. Keep all keys local and never commit them.
 
 ## Checks
 

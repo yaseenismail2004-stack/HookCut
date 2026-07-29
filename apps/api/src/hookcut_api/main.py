@@ -15,7 +15,7 @@ from hookcut_api.routers.jobs import router as jobs_router
 from hookcut_api.schemas import CapabilitiesResponse, HealthResponse
 from hookcut_api.services.capabilities import detect_capabilities
 from hookcut_api.services.storage import StorageService
-from hookcut_api.services.transcription import OpenAITranscriptionProvider
+from hookcut_api.services.transcription import TranscriptionProviderRegistry, build_provider_registry
 from hookcut_api.services.worker import LocalJobWorker
 
 
@@ -42,8 +42,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.storage = storage
         app.state.settings = configured_settings
         app.state.session_factory = create_session_factory(configured_settings)
-        app.state.transcription_provider = getattr(app.state, "transcription_provider", OpenAITranscriptionProvider(configured_settings))
-        app.state.worker = LocalJobWorker(app.state.session_factory, storage, configured_settings, app.state.transcription_provider)
+        legacy_provider = getattr(app.state, "transcription_provider", None)
+        # Test-only dependency injection remains supported, while production always
+        # uses the explicit Gemini/OpenAI registry with no automatic fallback.
+        providers = getattr(app.state, "transcription_providers", None)
+        if not isinstance(providers, TranscriptionProviderRegistry):
+            providers = TranscriptionProviderRegistry({"gemini": legacy_provider, "openai": legacy_provider}) if legacy_provider is not None else build_provider_registry(configured_settings)
+        app.state.transcription_providers = providers
+        app.state.worker = LocalJobWorker(app.state.session_factory, storage, configured_settings, providers)
         if configured_settings.worker_enabled:
             app.state.worker.start()
         yield
@@ -64,7 +70,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/system/capabilities", response_model=CapabilitiesResponse, tags=["system"])
     def capabilities(storage: StorageService = Depends(get_storage_service)) -> CapabilitiesResponse:
-        return detect_capabilities(configured_settings, storage, bool(app.state.worker.running))
+        return detect_capabilities(configured_settings, storage, bool(app.state.worker.running), app.state.transcription_providers.configured_names())
 
     app.include_router(videos_router)
     app.include_router(jobs_router)

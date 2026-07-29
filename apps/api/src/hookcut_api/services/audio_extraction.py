@@ -26,7 +26,7 @@ class AudioMetadata:
     file_size_bytes: int
 
 
-def _probe_audio(path: Path) -> AudioMetadata:
+def probe_audio(path: Path) -> AudioMetadata:
     try:
         result = subprocess.run(["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)], capture_output=True, text=True, timeout=20, check=False)
     except subprocess.TimeoutExpired as error:
@@ -65,7 +65,7 @@ def extract_audio(source: Path, destination: Path, source_duration: float, on_pr
         if process.wait(timeout=10) != 0:
             raise AudioExtractionError("audio_extraction_failed", "Audio extraction failed.")
         on_progress(100.0)
-        metadata = _probe_audio(destination)
+        metadata = probe_audio(destination)
         logger.info("event=audio_extraction_completed duration_seconds=%.3f", metadata.duration_seconds)
         return metadata
     except (OSError, subprocess.SubprocessError) as error:

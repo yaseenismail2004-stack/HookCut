@@ -2,7 +2,7 @@
 
 ## Status
 
-**Locked on 2026-07-26.** This document defines the product MVP only; it does not authorize implementation, dependency installation, framework selection, external writes, or unattended automation.
+**Locked on 2026-07-26; provider decision updated on 2026-07-29 by explicit human approval.** This document defines the product MVP only; it does not authorize implementation, dependency installation, framework selection, external writes, or unattended automation.
 
 ## Product and user
 
@@ -29,7 +29,7 @@ The MVP serves one Windows-based UGC clipper, content creator, or social-media e
 Use hybrid local-first processing:
 
 - Local: FFmpeg/ffprobe validation, audio extraction, rendering, subtitle burn-in, storage, cleanup, and practical face detection/reframing.
-- Cloud AI: OpenAI API transcription, transcript analysis, hook scoring, semantic similarity, and ranking.
+- Cloud AI: Gemini API transcription is primary, with OpenAI optional for transcription, transcript analysis, hook scoring, semantic similarity, and ranking.
 - Send audio, transcript, or structured text rather than the full source video whenever sufficient.
 - Prefer safe hardware-accelerated encoding with a CPU fallback.
 
@@ -66,7 +66,7 @@ Support portrait and landscape sources. Track one main speaker when practical, k
 
 ## Cost, privacy, ownership, and storage
 
-- Use OpenAI as the initial approved AI provider behind replaceable provider abstractions.
+- Use Gemini as the initial approved AI provider behind replaceable provider abstractions; retain OpenAI as an optional explicit provider. Never automatically switch providers or spend without the user's selection and approval. Gemini Free Tier may have data-use constraints, so require the user's informed consent before sending extracted audio.
 - Keep API keys server-side, estimate and display job cost when possible, cache valid analysis, avoid repeated calls, and default to a configurable ceiling of US$1.50 per source-video hour. Pause for approval before exceeding it; never silently exceed the limit.
 - No authentication, public SaaS deployment, or application-owned cloud media storage in this MVP. The product is single-user, local-first, Windows-first, and accessed locally.
 - Source and rendered media remain on the user's machine. Delete temporary extracted audio after success; safely clean failed-job temporary files after user retry or deletion; allow manual deletion of every project and generated file.

@@ -4,7 +4,7 @@ import logging
 import threading
 import time
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from hookcut_api.config import Settings
 from hookcut_api.models import AudioArtifact, AudioArtifactStatus, JobState, ProcessingJob, Transcript, TranscriptSegment, TranscriptStatus, TranscriptWord
-from hookcut_api.services.audio_extraction import AudioExtractionError, extract_audio
+from hookcut_api.services.audio_extraction import AudioExtractionError, AudioMetadata, extract_audio, probe_audio
 from hookcut_api.services.jobs import JobTransitionError, recover_interrupted_jobs, source_ready, transition
 from hookcut_api.services.storage import StorageService
-from hookcut_api.services.transcription import OpenAITranscriptionProvider, ProviderError, TranscriptionProvider
+from hookcut_api.services.transcription import ProviderError, TranscriptionProvider, TranscriptionProviderRegistry, build_provider_registry
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +23,11 @@ logger = logging.getLogger(__name__)
 class LocalJobWorker:
     """One local worker thread. It processes only jobs explicitly created through the API."""
 
-    def __init__(self, session_factory: sessionmaker[Session], storage: StorageService, settings: Settings, provider: TranscriptionProvider | None = None) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], storage: StorageService, settings: Settings, providers: TranscriptionProviderRegistry | None = None) -> None:
         self._sessions = session_factory
         self._storage = storage
         self._settings = settings
-        self._provider = provider or OpenAITranscriptionProvider(settings)
+        self._providers = providers or build_provider_registry(settings)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -80,9 +80,40 @@ class LocalJobWorker:
         job = session.get(ProcessingJob, job_id)
         return self._stop.is_set() or bool(job and job.cancellation_requested)
 
+    def _reusable_audio(self, session: Session, job: ProcessingJob) -> tuple[AudioArtifact, Path, AudioMetadata] | None:
+        """Return one validated ready artifact for a resumed job without duplication."""
+        artifact = session.scalars(
+            select(AudioArtifact)
+            .where(AudioArtifact.job_id == job.id, AudioArtifact.status == AudioArtifactStatus.READY)
+            .order_by(AudioArtifact.created_at.desc())
+            .limit(1)
+        ).first()
+        if artifact is None:
+            return None
+        try:
+            destination = self._storage.resolve(PurePath("audio") / artifact.stored_filename)
+            metadata = probe_audio(destination)
+        except (AudioExtractionError, OSError):
+            self._storage.remove_audio(artifact.stored_filename)
+            artifact.status = AudioArtifactStatus.DELETED
+            artifact.deleted_at = datetime.now(UTC)
+            session.commit()
+            return None
+        artifact.duration_seconds = metadata.duration_seconds
+        artifact.codec = metadata.codec
+        artifact.sample_rate = metadata.sample_rate
+        artifact.channels = metadata.channels
+        artifact.file_size_bytes = metadata.file_size_bytes
+        session.commit()
+        logger.info("event=audio_reused_for_resume job_id=%s", job.id)
+        return artifact, destination, metadata
+
     def _process(self, session: Session, job: ProcessingJob) -> None:
         audio: AudioArtifact | None = None
         try:
+            provider = self._providers.get(job.transcription_provider)
+            if provider is None or not provider.is_configured():
+                raise ProviderError("provider_not_configured", "The selected transcription provider is not configured.")
             video = source_ready(session, job.video_id)
             if video is None:
                 raise AudioExtractionError("source_not_ready", "The source video is unavailable or not ready.")
@@ -93,10 +124,15 @@ class LocalJobWorker:
                 transition(job, JobState.CANCELLED, "cancelled")
                 session.commit(); return
             transition(job, JobState.EXTRACTING_AUDIO, "extracting_audio", 0)
-            stored_filename, destination = self._storage.new_audio_path()
-            audio = AudioArtifact(id=str(uuid4()), video_id=job.video_id, job_id=job.id, stored_filename=stored_filename, file_size_bytes=0, status=AudioArtifactStatus.EXTRACTING)
-            session.add(audio); session.commit()
-            metadata = extract_audio(source, destination, float(video.duration_seconds or 0), lambda value: self._update_progress(session, job.id, value), lambda: self._cancelled(session, job.id))
+            reusable = self._reusable_audio(session, job)
+            if reusable is None:
+                stored_filename, destination = self._storage.new_audio_path()
+                audio = AudioArtifact(id=str(uuid4()), video_id=job.video_id, job_id=job.id, stored_filename=stored_filename, file_size_bytes=0, status=AudioArtifactStatus.EXTRACTING)
+                session.add(audio); session.commit()
+                metadata = extract_audio(source, destination, float(video.duration_seconds or 0), lambda value: self._update_progress(session, job.id, value), lambda: self._cancelled(session, job.id))
+            else:
+                audio, destination, metadata = reusable
+                stored_filename = audio.stored_filename
             if self._cancelled(session, job.id):
                 self._storage.remove_audio(stored_filename)
                 audio.status = AudioArtifactStatus.DELETED; audio.deleted_at = datetime.now(UTC)
@@ -104,7 +140,7 @@ class LocalJobWorker:
                 session.commit(); return
             audio.duration_seconds = metadata.duration_seconds; audio.codec = metadata.codec; audio.sample_rate = metadata.sample_rate; audio.channels = metadata.channels; audio.file_size_bytes = metadata.file_size_bytes; audio.status = AudioArtifactStatus.READY
             transition(job, JobState.AUDIO_READY, "audio_ready", 100); transition(job, JobState.ESTIMATING_COST, "estimating_cost")
-            estimate = self._provider.estimate_cost(metadata.duration_seconds)
+            estimate = provider.estimate_cost(metadata.duration_seconds)
             job.estimated_cost_usd = estimate
             allowed = float(video.duration_seconds or 0) / 3600 * float(self._settings.max_ai_cost_per_video_hour_usd)
             if (estimate is None and not job.cost_approved) or (estimate is not None and estimate > allowed and not job.cost_approved):
@@ -114,7 +150,7 @@ class LocalJobWorker:
                 session.commit(); return
             transition(job, JobState.TRANSCRIBING, "transcribing")
             session.commit()
-            result = self._provider.transcribe(destination, job.language_mode)
+            result = provider.transcribe(destination, job.language_mode)
             if self._cancelled(session, job.id):
                 self._storage.remove_audio(stored_filename); audio.status = AudioArtifactStatus.DELETED; audio.deleted_at = datetime.now(UTC); transition(job, JobState.CANCELLED, "cancelled"); session.commit(); return
             transition(job, JobState.SAVING_TRANSCRIPT, "saving_transcript")

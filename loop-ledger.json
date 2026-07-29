@@ -11,5 +11,26 @@
     "verification_result": "string or null",
     "note": "string or null"
   },
-  "entries": []
+  "entries": [
+    {
+      "item_id": "restore-python-tooling",
+      "attempt_number": 1,
+      "status": "escalated",
+      "scope": "Restore Windows App Installer access to winget, then install Python 3.12 only and verify the existing backend test command.",
+      "started_at": "2026-07-29T09:30:00+03:00",
+      "intended_verification": "python --version; python -m pip --version; backend pytest",
+      "verification_result": "Microsoft Store page for App Installer opened; no package installation can be confirmed without the user's interactive action.",
+      "note": "Paused safely before Python installation; no application files, dependencies, commits, pushes, or merges were changed."
+    },
+    {
+      "item_id": "restore-python-tooling",
+      "attempt_number": 2,
+      "status": "passed",
+      "scope": "Recreate only the broken project-local API virtual environment using the verified existing Python 3.12 interpreter, then install the declared API dependencies and verify the runtime.",
+      "started_at": "2026-07-29T10:20:00+03:00",
+      "intended_verification": "project virtual environment Python and pip versions; API imports; backend pytest",
+      "verification_result": "The verified Python 3.12 interpreter and project-local pip run successfully. FastAPI, OpenAI SDK, Google GenAI SDK, SQLAlchemy, pytest, and mypy import from the recreated project-local environment.",
+      "note": "The dependency-install command reached its tool timeout, but post-timeout inspection confirmed the declared environment dependencies were installed successfully."
+    }
+  ]
 }

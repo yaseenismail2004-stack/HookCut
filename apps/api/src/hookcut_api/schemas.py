@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
@@ -22,10 +22,16 @@ class StorageCapabilities(BaseModel):
 
 
 class ConfigurationState(BaseModel):
+    gemini_api_key_configured: bool
+    gemini_sdk_available: bool = False
+    gemini_transcription_model_configured: bool = False
+    gemini_transcription_provider_available: bool = False
     openai_api_key_configured: bool
     openai_sdk_available: bool = False
     transcription_model_configured: bool = False
     transcription_provider_available: bool = False
+    configured_transcription_providers: list[str] = Field(default_factory=list)
+    primary_transcription_provider: str = "gemini"
     cost_estimation_configured: bool = False
     database_configured: bool
 
@@ -72,7 +78,7 @@ class ErrorDetail(BaseModel):
 
 class TranscriptionJobRequest(BaseModel):
     language_mode: str = "auto"
-    provider: str = "openai"
+    provider: str = "gemini"
     approve_estimated_cost: bool = False
 
 

@@ -13,6 +13,7 @@ from hookcut_api.schemas import (
     ToolAvailability,
 )
 from hookcut_api.services.storage import StorageService
+from hookcut_api.services.transcription import gemini_sdk_available
 
 
 def _tool_availability(command: str) -> ToolAvailability:
@@ -33,7 +34,7 @@ def _tool_availability(command: str) -> ToolAvailability:
     return ToolAvailability(available=completed.returncode == 0, version=first_line)
 
 
-def detect_capabilities(settings: Settings, storage: StorageService, worker_running: bool = False) -> CapabilitiesResponse:
+def detect_capabilities(settings: Settings, storage: StorageService, worker_running: bool = False, configured_providers: list[str] | None = None) -> CapabilitiesResponse:
     """Report only safe boolean/version capability information, never local paths or secrets."""
 
     return CapabilitiesResponse(
@@ -45,11 +46,16 @@ def detect_capabilities(settings: Settings, storage: StorageService, worker_runn
             project_write_permission=storage.project_write_permission(),
         ),
         configuration=ConfigurationState(
+            gemini_api_key_configured=bool(settings.gemini_api_key),
+            gemini_sdk_available=gemini_sdk_available(),
+            gemini_transcription_model_configured=bool(settings.gemini_transcription_model),
+            gemini_transcription_provider_available=bool(settings.gemini_api_key and settings.gemini_transcription_model and gemini_sdk_available()),
             openai_api_key_configured=bool(settings.openai_api_key),
             openai_sdk_available=find_spec("openai") is not None,
             transcription_model_configured=bool(settings.openai_transcription_model),
-            transcription_provider_available=bool(settings.openai_api_key and settings.openai_transcription_model),
-            cost_estimation_configured=settings.openai_transcription_cost_per_minute_usd is not None,
+            transcription_provider_available=bool(configured_providers),
+            configured_transcription_providers=configured_providers or [],
+            cost_estimation_configured=settings.gemini_transcription_cost_per_minute_usd is not None or settings.openai_transcription_cost_per_minute_usd is not None,
             database_configured=bool(settings.database_url),
         ),
         worker_running=worker_running,

@@ -24,7 +24,7 @@ The frontend only shows the project foundation and real backend connection state
 - Uploads stream in 1 MiB chunks, enforce the configured size limit during receipt, use cryptographically random server-side filenames, and validate claimed format plus actual ffprobe structure.
 - ffprobe is invoked with an argument array and timeout; no shell command is created from user input.
 - Deletion is idempotent and constrained to the matching upload path below the storage root.
-- The OpenAI key remains server-only. Cost must be estimated and remain under the source-duration-scaled ceiling, or the job pauses for explicit approval.
+- Gemini is the primary server-only provider and OpenAI is optional. Provider selection is explicit per job; there is no automatic cross-provider fallback or automatic spend. Gemini receives only the temporary extracted audio, returns structured timestamped transcript data, and its remote file deletion must be confirmed before local transcript storage. Cost must be estimated and remain under the source-duration-scaled ceiling, or the job pauses for explicit approval.
 - Temporary audio is removed after a stored successful transcript or failed incomplete extraction.
 
 ## Deferred boundaries
