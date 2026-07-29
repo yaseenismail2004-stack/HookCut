@@ -18,6 +18,14 @@ npm run db:migrate
 npm run dev
 ```
 
+To test on a phone connected to the same private Wi-Fi network, use:
+
+```powershell
+npm run dev:lan
+```
+
+The command prints the private LAN URL. Do not use this mode on a public or untrusted network. If Windows asks, permit the local development tools only on a **private** network.
+
 The web app is available at `http://127.0.0.1:3000`; the API is available at `http://127.0.0.1:8000`.
 
 `npm run dev` writes local development output to `.local/api-dev.out.log`, `.local/api-dev.err.log`, `.local/web-dev.out.log`, and `.local/web-dev.err.log`. These files are Git-ignored. Set `NEXT_PUBLIC_UPLOAD_REQUEST_TIMEOUT_MS` in `apps/web/.env` to override the 180000 ms browser upload-and-validation timeout.

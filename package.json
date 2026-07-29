@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "dev:web": "npm --prefix apps/web run dev",
+    "dev:lan": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1 -Lan",
     "dev:api": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1 -ApiOnly",
     "build": "npm --prefix apps/web run build",
     "lint": "npm --prefix apps/web run lint",
