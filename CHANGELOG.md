@@ -7,12 +7,9 @@
 
 All entries describe completed, verified checkpoints only. Unverified working-tree changes are recorded in `PROJECT_STATUS.md`, not here.
 
-## Uncommitted local work (not a verified checkpoint)
+## Verified Phase 4 checkpoint
 
-- Redesigned the Phase 4 Gemini contract to use a compact semantic-only shortlist response; it has passed local verification but still requires one explicit live provider verification before it can become a verified checkpoint.
-- Migrated the uncommitted Phase 4 clip-analysis transport from Gemini Interactions to Generate Content with locally verified Pydantic structured output; it still requires one explicit live verification before it can become a verified checkpoint.
-- Replaced the uncommitted Phase 4 provider contract with a locally verified ultra-flat raw JSON Schema response and local canonical scoring; the later bounded live verification succeeded.
-- Verified the Phase 4 Gemini clip-analysis pipeline with one bounded ultra-flat Generate Content request, durable persistence, restart retrieval, and manual reserve adjustment. No rendering or Phase 5 work was included.
+- Commit `d00a1e1` contains the Phase 4 Gemini clip-analysis pipeline: compact shortlisting, ultra-flat Generate Content transport, local scoring and final selection, durable persistence, API/frontend workflow, tests, and documentation. One bounded live request verified persistence and restart retrieval. No rendering or Phase 5 work was included.
 
 ## 2026-07-29
 
