@@ -21,4 +21,17 @@ Append one record after each human-requested review. This file is an audit trail
 
 ## Recent Runs
 
-No triage runs recorded.
+```json
+{
+  "run_id": "2026-07-29T06:38:27+03:00",
+  "pattern": "daily-triage",
+  "mode": "L1-assisted-report-only",
+  "duration_s": 30,
+  "items_found": 0,
+  "actions_taken": 0,
+  "escalations": 0,
+  "tokens_estimate": 3000,
+  "outcome": "report-only",
+  "human_request": "Rerun Windows environment validation after Python, FFmpeg, and disk-space remediation."
+}
+```

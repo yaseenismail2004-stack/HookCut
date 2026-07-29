@@ -2,9 +2,9 @@
 
 ## Status
 
-Validated on 2026-07-26 for the locked AI UGC Clipper MVP. No application code, framework, dependency, package manifest, or mock UI was created.
+Validated on 2026-07-29 for the locked AI UGC Clipper MVP. No application code, framework, dependency, package manifest, or mock UI was created.
 
-**Environment readiness: NOT READY.** The validator completed with eight critical failures.
+**Environment readiness: READY — SAFE TO SCAFFOLD.** All critical and important checks pass. The only remaining findings are optional warnings.
 
 ## Detected environment
 
@@ -19,19 +19,20 @@ Validated on 2026-07-26 for the locked AI UGC Clipper MVP. No application code, 
 | OpenAI API key | Important | PASS - present; value was not read or displayed |
 | Cloud AI HTTPS connectivity | Important | PASS |
 | Project path compatibility | Optional | PASS - no known problematic characters or excessive length |
-| Python and pip | Critical | FAIL - neither `python` nor `py` is available |
-| FFmpeg and ffprobe | Critical | FAIL - not available |
-| CPU H.264 / libx264 | Critical | FAIL - cannot inspect without FFmpeg |
-| AAC encoding | Critical | FAIL - cannot inspect without FFmpeg |
-| Project-drive capacity | Critical | FAIL - 14.28 GB free; MVP validation requires at least 20 GB |
+| Python | Critical | PASS - 3.12.10 |
+| pip | Critical | PASS - 25.0.1 for Python 3.12 |
+| FFmpeg and ffprobe | Critical | PASS - 8.1.2 full build |
+| CPU H.264 / libx264 | Critical | PASS |
+| AAC encoding | Critical | PASS |
+| Project-drive capacity | Critical | PASS - 65.81 GB free; MVP validation requires at least 20 GB |
 
 The Windows CIM query is available outside the sandbox. The validator falls back safely to the .NET OS API when CIM is unavailable in a restricted shell.
 
 ## FFmpeg capabilities
 
-FFmpeg is absent, so the validator could not confirm the required subtitle, ASS, scale, crop, overlay, blur, NVENC, Intel Quick Sync, or AMD AMF capabilities. This affects subtitle burn-in, vertical reframing, rendering, post-render validation, and the required CPU fallback.
+The full FFmpeg build provides the required `subtitles`, `ass`, `scale`, `crop`, `overlay`, and blur filters. It provides `libx264` and native AAC for the required CPU fallback. NVENC, Intel Quick Sync, and AMD AMF encoders were detected; they remain optional and require runtime hardware validation when the application is implemented.
 
-The FFmpeg smoke test was **not run**: it correctly refused to generate test media until FFmpeg, ffprobe, libx264, and AAC are available. It did not leave temporary media files behind.
+The real smoke test **passed**. It generated a synthetic five-second source with audio, probed it, rendered a 1080x1920 MP4 using H.264, AAC, `yuv420p`, and fast-start metadata, then verified non-zero output, video and audio streams, dimensions, and duration. Temporary media was removed from the project-local validation directory.
 
 ## Warnings
 
@@ -39,25 +40,10 @@ The FFmpeg smoke test was **not run**: it correctly refused to generate test med
 - `yt-dlp` is not installed. Authorized YouTube import is optional for environment readiness but cannot be implemented until a compliant tool is selected and available.
 - No known Python or FFmpeg environment-variable conflict was detected.
 
-## Required actions before scaffolding
+## Remaining non-blocking observations
 
-1. Install Python with pip, then open a new terminal and rerun the validator:
-
-   ```powershell
-   winget install Python.Python.3.12
-   ```
-
-   This is critical because the local backend, validation tooling, and media orchestration require a real Python interpreter and pip. The project validator tries `python` first and then `py`.
-
-2. Install a full FFmpeg build with ffprobe, libx264, AAC, subtitle/ASS filters, and standard video filters, then rerun the validator:
-
-   ```powershell
-   winget install Gyan.FFmpeg
-   ```
-
-   This is critical because the MVP must validate media, render vertical H.264/AAC MP4 files, burn subtitles, and probe real output. The validator will confirm filter support, hardware encoders, CPU fallback, and the synthetic five-second smoke test after installation.
-
-3. Free or add at least **5.72 GB** on the project drive to reach the 20 GB minimum. This is critical for safely handling sources up to 4 GB, temporary media, and rendered clips.
+- Windows long paths are disabled or unavailable. This is optional; keep project, media, and temporary-media paths short.
+- `yt-dlp` is not installed. Authorized YouTube import is optional for environment readiness and must not be implemented until a compliant import workflow is separately approved.
 
 ## Optional follow-up
 
