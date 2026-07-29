@@ -11,9 +11,12 @@ from hookcut_api.config import Settings, get_settings
 from hookcut_api.db import create_session_factory
 from hookcut_api.dependencies import get_storage_service
 from hookcut_api.routers.videos import router as videos_router
+from hookcut_api.routers.jobs import router as jobs_router
 from hookcut_api.schemas import CapabilitiesResponse, HealthResponse
 from hookcut_api.services.capabilities import detect_capabilities
 from hookcut_api.services.storage import StorageService
+from hookcut_api.services.transcription import OpenAITranscriptionProvider
+from hookcut_api.services.worker import LocalJobWorker
 
 
 def _configure_development_logging() -> None:
@@ -39,7 +42,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.storage = storage
         app.state.settings = configured_settings
         app.state.session_factory = create_session_factory(configured_settings)
+        app.state.transcription_provider = getattr(app.state, "transcription_provider", OpenAITranscriptionProvider(configured_settings))
+        app.state.worker = LocalJobWorker(app.state.session_factory, storage, configured_settings, app.state.transcription_provider)
+        if configured_settings.worker_enabled:
+            app.state.worker.start()
         yield
+        app.state.worker.stop()
 
     app = FastAPI(title="HookCut API", version=configured_settings.app_version, lifespan=lifespan)
     app.add_middleware(
@@ -56,9 +64,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/system/capabilities", response_model=CapabilitiesResponse, tags=["system"])
     def capabilities(storage: StorageService = Depends(get_storage_service)) -> CapabilitiesResponse:
-        return detect_capabilities(configured_settings, storage)
+        return detect_capabilities(configured_settings, storage, bool(app.state.worker.running))
 
     app.include_router(videos_router)
+    app.include_router(jobs_router)
     return app
 
 

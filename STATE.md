@@ -1,12 +1,12 @@
 # Loop State
 
-Last reviewed: 2026-07-29 (Phase 2 secure local video intake verified)
+Last reviewed: 2026-07-29 (Phase 3 durable transcription pipeline verified locally)
 Operating level: L1 assisted, report-only
 Pause state: active only when a human sets `loop-pause-all` below
 
 ## High Priority (waiting on human)
 
-- None. Phase 2 is limited to real local upload, file validation, ffprobe metadata extraction, metadata records, and safe deletion. Phase 3 remains unstarted.
+- None. Phase 3 implements only durable transcription jobs, real audio extraction, provider architecture, cost approval, and transcript persistence. Phase 4 remains unstarted.
 
 ## Watch List
 
@@ -25,6 +25,7 @@ Pause state: active only when a human sets `loop-pause-all` below
 - Phase 1 foundation was implemented and verified: Next.js App Router frontend, FastAPI backend, real health/capabilities endpoints, storage-root enforcement, project-local development scripts, tests, lint, type checking, production build, and temporary integration smoke tests all passed. No AI, media processing, importing, rendering, subtitles, or authentication was implemented. No unattended automation was enabled.
 - Phase 2 was verified: SQLite `VideoAsset` records and an Alembic migration; streamed MP4/MOV/MKV/WebM intake; ffprobe stream/container/duration/resolution validation; and safe repeatable deletion. A synthetic 21-second H.264/AAC video was uploaded through the live API, its metadata retrieved, and its physical upload removed through the live delete endpoint. No Phase 3 work was started.
 - Phase 2 upload-stall fix verified: upload-body completion now enters an indeterminate validation state before the XHR response arrives; response, error, timeout, abort, and malformed-response paths all settle the UI. The browser timeout defaults to 180000 ms and is configurable via `NEXT_PUBLIC_UPLOAD_REQUEST_TIMEOUT_MS`. Structured local development logs record upload, ffprobe, database, and response milestones without paths or secrets. No Phase 3 work was started.
+- Phase 3 was implemented locally: durable SQLite processing jobs, real FFmpeg FLAC audio extraction with ffprobe validation, safe artifact cleanup, a single local worker, cost-approval gates, retry/cancellation endpoints, normalized transcript persistence, and a server-only OpenAI provider abstraction. Local integration uses a test-only injected provider; no live OpenAI call has been made without a configured API key and model. No Phase 4 work was started.
 
 ## Pause Flag
 

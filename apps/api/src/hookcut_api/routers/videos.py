@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from collections.abc import Generator
+from typing import cast
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
@@ -50,11 +51,11 @@ def get_db(request: Request) -> Generator[Session, None, None]:
 
 
 def get_storage(request: Request) -> StorageService:
-    return request.app.state.storage
+    return cast(StorageService, request.app.state.storage)
 
 
 def get_settings_from_app(request: Request) -> Settings:
-    return request.app.state.settings
+    return cast(Settings, request.app.state.settings)
 
 
 @router.post("/upload", response_model=VideoResponse, status_code=status.HTTP_201_CREATED)

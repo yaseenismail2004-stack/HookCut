@@ -11,7 +11,7 @@ from hookcut_api.main import create_app
 
 
 def test_health_endpoint_returns_real_service_metadata(tmp_path: Path) -> None:
-    settings = Settings(storage_root=str(tmp_path))
+    settings = Settings(storage_root=str(tmp_path), worker_enabled=False)
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/health")
     assert response.status_code == 200
@@ -20,7 +20,7 @@ def test_health_endpoint_returns_real_service_metadata(tmp_path: Path) -> None:
 
 def test_capabilities_never_return_secret_values(tmp_path: Path) -> None:
     secret = "do-not-return-this-secret"
-    settings = Settings(storage_root=str(tmp_path), openai_api_key=secret, database_url="sqlite:///private.db")
+    settings = Settings(storage_root=str(tmp_path), openai_api_key=secret, database_url="sqlite:///private.db", worker_enabled=False)
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/system/capabilities")
     assert response.status_code == 200

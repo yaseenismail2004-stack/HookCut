@@ -18,6 +18,7 @@
 - processing job states
 - audio extraction
 - transcription provider
+- durable SQLite jobs, local worker, cost approval, and transcript persistence
 
 ## Phase 4 — Candidate selection
 

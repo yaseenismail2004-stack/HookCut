@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, PositiveFloat, PositiveInt
+from pydantic import NonNegativeFloat, PositiveFloat, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[4]
 class Settings(BaseSettings):
     """Runtime configuration. Values are read from environment variables only."""
 
-    model_config = SettingsConfigDict(env_file=None, extra="ignore")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_version: str = "0.1.0"
     storage_root: str = "storage"
@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     max_video_duration_seconds: PositiveInt = 7200
     max_ai_cost_per_video_hour_usd: PositiveFloat = 1.5
     openai_api_key: str | None = None
+    openai_transcription_model: str | None = None
+    openai_transcription_cost_per_minute_usd: NonNegativeFloat | None = None
+    openai_request_timeout_seconds: PositiveInt = 120
+    worker_poll_interval_seconds: PositiveFloat = 0.5
+    worker_enabled: bool = True
     database_url: str = "sqlite:///storage/hookcut.db"
 
     @property

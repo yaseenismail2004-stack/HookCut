@@ -1,6 +1,6 @@
 # HookCut
 
-HookCut is a local-first Windows AI UGC clipper. Phase 2 adds real local video intake: streamed upload, SQLite metadata records, ffprobe validation, and safe deletion. It does not transcribe, analyse, select, render, subtitle, import, track faces, or authenticate users.
+HookCut is a local-first Windows AI UGC clipper. Phase 3 adds durable local transcription jobs, FFmpeg audio extraction, a server-side OpenAI provider abstraction, cost approval, and timestamped transcript storage. It does not select clips, render, burn subtitles, import YouTube, track faces, or authenticate users.
 
 ## Windows quick start
 
@@ -35,6 +35,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-dev.ps1
 ## Local uploads
 
 `POST /api/videos/upload` accepts MP4, MOV, MKV, and WebM uploads up to 4 GB. The API streams files in bounded chunks to `storage/uploads`, validates the actual container and streams with ffprobe, and accepts only media with video, usable audio, 20 seconds to 2 hours duration, and no dimension above 3840 pixels. Rejected and cancelled uploads are removed safely. `GET /api/videos`, `GET /api/videos/{id}`, and `DELETE /api/videos/{id}` return only safe metadata; the stored filename and local paths remain private.
+
+## Transcription setup
+
+Copy `apps/api/.env.example` to `apps/api/.env`, then set `OPENAI_API_KEY` and `OPENAI_TRANSCRIPTION_MODEL`. Optionally set `OPENAI_TRANSCRIPTION_COST_PER_MINUTE_USD` for estimates. Keep this file local and never commit it. Without both key and model the app starts normally, but transcription-job creation returns a clear configuration error.
 
 ## Checks
 

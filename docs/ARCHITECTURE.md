@@ -1,4 +1,4 @@
-# Phase 2 Architecture
+# Phase 3 Architecture
 
 HookCut is a local-first Windows workspace with two independently runnable applications:
 
@@ -6,10 +6,13 @@ HookCut is a local-first Windows workspace with two independently runnable appli
 - `apps/api`: FastAPI service. It owns server-side configuration, safe capability detection, and local storage-path enforcement.
 - `storage`: project-local media roots. Phase 2 accepts files only beneath `storage/uploads`; rejected and explicitly deleted files are removed only through root-enforced paths.
 - SQLite stores `VideoAsset` metadata. Alembic owns the schema migration; startup runs `upgrade head` before the API process is launched.
+- SQLite also stores durable processing jobs, audio artifacts, transcripts, timestamped segments, and timestamped words. One in-process local worker claims explicitly created jobs; it is not a scheduler or unattended external automation.
 
 ## Current boundary
 
 The application endpoints are `GET /api/health`, `GET /api/system/capabilities`, `POST /api/videos/upload`, `GET /api/videos`, `GET /api/videos/{id}`, and `DELETE /api/videos/{id}`. They do not expose API keys, stored filenames, environment values, or absolute local paths.
+
+Phase 3 adds transcription job creation, status, approval, cancellation, retry, per-video job listing, and transcript retrieval endpoints. The worker extracts mono 16 kHz FLAC locally, validates it with ffprobe, and sends only the audio to a configured provider.
 
 The frontend only shows the project foundation and real backend connection state. It does not simulate uploads, processing, results, downloads, or clip data.
 
@@ -21,7 +24,9 @@ The frontend only shows the project foundation and real backend connection state
 - Uploads stream in 1 MiB chunks, enforce the configured size limit during receipt, use cryptographically random server-side filenames, and validate claimed format plus actual ffprobe structure.
 - ffprobe is invoked with an argument array and timeout; no shell command is created from user input.
 - Deletion is idempotent and constrained to the matching upload path below the storage root.
+- The OpenAI key remains server-only. Cost must be estimated and remain under the source-duration-scaled ceiling, or the job pauses for explicit approval.
+- Temporary audio is removed after a stored successful transcript or failed incomplete extraction.
 
 ## Deferred boundaries
 
-AI calls, jobs, transcription, selection, rendering, captions, YouTube imports, face tracking, authentication, and downloads remain outside Phase 2.
+Selection, rendering, captions, YouTube imports, face tracking, authentication, and downloads remain outside Phase 3.

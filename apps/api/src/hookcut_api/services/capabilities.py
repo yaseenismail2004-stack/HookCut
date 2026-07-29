@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from importlib.util import find_spec
 
 from hookcut_api.config import Settings
 from hookcut_api.schemas import (
@@ -32,7 +33,7 @@ def _tool_availability(command: str) -> ToolAvailability:
     return ToolAvailability(available=completed.returncode == 0, version=first_line)
 
 
-def detect_capabilities(settings: Settings, storage: StorageService) -> CapabilitiesResponse:
+def detect_capabilities(settings: Settings, storage: StorageService, worker_running: bool = False) -> CapabilitiesResponse:
     """Report only safe boolean/version capability information, never local paths or secrets."""
 
     return CapabilitiesResponse(
@@ -45,6 +46,11 @@ def detect_capabilities(settings: Settings, storage: StorageService) -> Capabili
         ),
         configuration=ConfigurationState(
             openai_api_key_configured=bool(settings.openai_api_key),
+            openai_sdk_available=find_spec("openai") is not None,
+            transcription_model_configured=bool(settings.openai_transcription_model),
+            transcription_provider_available=bool(settings.openai_api_key and settings.openai_transcription_model),
+            cost_estimation_configured=settings.openai_transcription_cost_per_minute_usd is not None,
             database_configured=bool(settings.database_url),
         ),
+        worker_running=worker_running,
     )

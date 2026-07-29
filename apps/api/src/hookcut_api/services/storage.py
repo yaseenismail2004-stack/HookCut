@@ -57,3 +57,12 @@ class StorageService:
         path = self.resolve(PurePath("uploads") / stored_filename)
         if path.is_file():
             path.unlink()
+
+    def new_audio_path(self) -> tuple[str, Path]:
+        stored_filename = f"{uuid4().hex}.flac"
+        return stored_filename, self.resolve(PurePath("audio") / stored_filename)
+
+    def remove_audio(self, stored_filename: str) -> None:
+        path = self.resolve(PurePath("audio") / stored_filename)
+        if path.is_file():
+            path.unlink()
