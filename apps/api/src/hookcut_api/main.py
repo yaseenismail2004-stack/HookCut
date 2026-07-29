@@ -12,10 +12,12 @@ from hookcut_api.db import create_session_factory
 from hookcut_api.dependencies import get_storage_service
 from hookcut_api.routers.videos import router as videos_router
 from hookcut_api.routers.jobs import router as jobs_router
+from hookcut_api.routers.clip_selection import router as clip_selection_router
 from hookcut_api.schemas import CapabilitiesResponse, HealthResponse
 from hookcut_api.services.capabilities import detect_capabilities
 from hookcut_api.services.storage import StorageService
 from hookcut_api.services.transcription import TranscriptionProviderRegistry, build_provider_registry
+from hookcut_api.services.clip_selection import GeminiClipAnalysisProvider
 from hookcut_api.services.worker import LocalJobWorker
 
 
@@ -49,7 +51,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not isinstance(providers, TranscriptionProviderRegistry):
             providers = TranscriptionProviderRegistry({"gemini": legacy_provider, "openai": legacy_provider}) if legacy_provider is not None else build_provider_registry(configured_settings)
         app.state.transcription_providers = providers
-        app.state.worker = LocalJobWorker(app.state.session_factory, storage, configured_settings, providers)
+        app.state.clip_analysis_providers = getattr(app.state, "clip_analysis_providers", {"gemini": GeminiClipAnalysisProvider(configured_settings)})
+        app.state.worker = LocalJobWorker(app.state.session_factory, storage, configured_settings, providers, app.state.clip_analysis_providers)
         if configured_settings.worker_enabled:
             app.state.worker.start()
         yield
@@ -74,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(videos_router)
     app.include_router(jobs_router)
+    app.include_router(clip_selection_router)
     return app
 
 

@@ -41,6 +41,7 @@ class VideoAsset(Base):
 
 class JobType(StrEnum):
     TRANSCRIPTION = "transcription"
+    CLIP_SELECTION = "clip_selection"
 
 
 class JobState(StrEnum):
@@ -52,6 +53,15 @@ class JobState(StrEnum):
     AWAITING_COST_APPROVAL = "awaiting_cost_approval"
     TRANSCRIBING = "transcribing"
     SAVING_TRANSCRIPT = "saving_transcript"
+    LOADING_TRANSCRIPT = "loading_transcript"
+    GENERATING_CANDIDATES = "generating_candidates"
+    OPTIMIZING_BOUNDARIES = "optimizing_boundaries"
+    ANALYZING_CANDIDATES = "analyzing_candidates"
+    SCORING_HOOKS = "scoring_hooks"
+    ESTIMATING_RETENTION = "estimating_retention"
+    DEDUPLICATING = "deduplicating"
+    SELECTING_FINAL_SET = "selecting_final_set"
+    SAVING_RESULTS = "saving_results"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -154,3 +164,80 @@ class TranscriptWord(Base):
     end_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     text: Mapped[str] = mapped_column(String(512), nullable=False)
     confidence: Mapped[float | None] = mapped_column(Float)
+
+
+class ClipSelectionRun(Base):
+    __tablename__ = "clip_selection_runs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    video_id: Mapped[str] = mapped_column(ForeignKey("video_assets.id"), nullable=False, index=True)
+    transcript_id: Mapped[str] = mapped_column(ForeignKey("transcripts.id"), nullable=False, index=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("processing_jobs.id"), nullable=False, unique=True)
+    requested_clip_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    duration_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    minimum_duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    maximum_duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    selection_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    diversity_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="strict")
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(128))
+    estimated_cost_usd: Mapped[float | None] = mapped_column(Float)
+    actual_cost_usd: Mapped[float | None] = mapped_column(Float)
+    candidate_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    selected_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reserve_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    rejected_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ClipCandidate(Base):
+    __tablename__ = "clip_candidates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    selection_run_id: Mapped[str] = mapped_column(ForeignKey("clip_selection_runs.id"), nullable=False, index=True)
+    video_id: Mapped[str] = mapped_column(ForeignKey("video_assets.id"), nullable=False, index=True)
+    transcript_id: Mapped[str] = mapped_column(ForeignKey("transcripts.id"), nullable=False, index=True)
+    start_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    end_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    duration_seconds: Mapped[float] = mapped_column(Float, nullable=False)
+    timestamp_precision: Mapped[str] = mapped_column(String(16), nullable=False, default="segment")
+    transcript_text: Mapped[str] = mapped_column(Text, nullable=False)
+    topic: Mapped[str] = mapped_column(String(256), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    hook_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    hook_text: Mapped[str] = mapped_column(Text, nullable=False)
+    hook_score: Mapped[float] = mapped_column(Float, nullable=False)
+    hook_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    first_1_second_score: Mapped[float] = mapped_column(Float, nullable=False)
+    first_3_seconds_score: Mapped[float] = mapped_column(Float, nullable=False)
+    first_5_seconds_score: Mapped[float] = mapped_column(Float, nullable=False)
+    retention_score: Mapped[float] = mapped_column(Float, nullable=False)
+    retention_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    standalone_score: Mapped[float] = mapped_column(Float, nullable=False)
+    usefulness_score: Mapped[float] = mapped_column(Float, nullable=False)
+    entertainment_score: Mapped[float] = mapped_column(Float, nullable=False)
+    emotional_impact_score: Mapped[float] = mapped_column(Float, nullable=False)
+    share_potential_score: Mapped[float] = mapped_column(Float, nullable=False)
+    save_potential_score: Mapped[float] = mapped_column(Float, nullable=False)
+    comment_potential_score: Mapped[float] = mapped_column(Float, nullable=False)
+    loop_potential_score: Mapped[float] = mapped_column(Float, nullable=False)
+    visual_suitability_score: Mapped[float] = mapped_column(Float, nullable=False)
+    viral_potential_score: Mapped[float] = mapped_column(Float, nullable=False)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    ideal_platform: Mapped[str] = mapped_column(String(16), nullable=False)
+    target_audience: Mapped[str] = mapped_column(String(256), nullable=False)
+    likely_viewer_reaction: Mapped[str] = mapped_column(String(256), nullable=False)
+    suggested_title: Mapped[str] = mapped_column(String(256), nullable=False)
+    suggested_on_screen_hook: Mapped[str] = mapped_column(String(256), nullable=False)
+    detected_weaknesses: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    boundary_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="balanced_segment")
+    selection_status: Mapped[str] = mapped_column(String(32), nullable=False, default="candidate")
+    selection_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    similarity_group: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

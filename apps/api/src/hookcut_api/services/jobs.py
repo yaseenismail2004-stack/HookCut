@@ -10,16 +10,25 @@ from hookcut_api.models import JobState, ProcessingJob, Transcript, VideoAsset, 
 
 logger = logging.getLogger(__name__)
 
-ACTIVE_STATES = {JobState.QUEUED, JobState.VALIDATING_SOURCE, JobState.EXTRACTING_AUDIO, JobState.AUDIO_READY, JobState.ESTIMATING_COST, JobState.AWAITING_COST_APPROVAL, JobState.TRANSCRIBING, JobState.SAVING_TRANSCRIPT}
+ACTIVE_STATES = {state for state in JobState if state not in {JobState.COMPLETED, JobState.FAILED, JobState.CANCELLED}}
 TRANSITIONS: dict[JobState, set[JobState]] = {
-    JobState.QUEUED: {JobState.VALIDATING_SOURCE, JobState.CANCELLED, JobState.FAILED},
+    JobState.QUEUED: {JobState.VALIDATING_SOURCE, JobState.LOADING_TRANSCRIPT, JobState.CANCELLED, JobState.FAILED},
     JobState.VALIDATING_SOURCE: {JobState.EXTRACTING_AUDIO, JobState.CANCELLED, JobState.FAILED},
     JobState.EXTRACTING_AUDIO: {JobState.AUDIO_READY, JobState.CANCELLED, JobState.FAILED},
     JobState.AUDIO_READY: {JobState.ESTIMATING_COST, JobState.CANCELLED, JobState.FAILED},
-    JobState.ESTIMATING_COST: {JobState.AWAITING_COST_APPROVAL, JobState.TRANSCRIBING, JobState.CANCELLED, JobState.FAILED},
+    JobState.ESTIMATING_COST: {JobState.AWAITING_COST_APPROVAL, JobState.TRANSCRIBING, JobState.ANALYZING_CANDIDATES, JobState.CANCELLED, JobState.FAILED},
     JobState.AWAITING_COST_APPROVAL: {JobState.QUEUED, JobState.CANCELLED},
     JobState.TRANSCRIBING: {JobState.SAVING_TRANSCRIPT, JobState.CANCELLED, JobState.FAILED},
     JobState.SAVING_TRANSCRIPT: {JobState.COMPLETED, JobState.CANCELLED, JobState.FAILED},
+    JobState.LOADING_TRANSCRIPT: {JobState.GENERATING_CANDIDATES, JobState.CANCELLED, JobState.FAILED},
+    JobState.GENERATING_CANDIDATES: {JobState.OPTIMIZING_BOUNDARIES, JobState.CANCELLED, JobState.FAILED},
+    JobState.OPTIMIZING_BOUNDARIES: {JobState.ESTIMATING_COST, JobState.CANCELLED, JobState.FAILED},
+    JobState.ANALYZING_CANDIDATES: {JobState.SCORING_HOOKS, JobState.CANCELLED, JobState.FAILED},
+    JobState.SCORING_HOOKS: {JobState.ESTIMATING_RETENTION, JobState.CANCELLED, JobState.FAILED},
+    JobState.ESTIMATING_RETENTION: {JobState.DEDUPLICATING, JobState.CANCELLED, JobState.FAILED},
+    JobState.DEDUPLICATING: {JobState.SELECTING_FINAL_SET, JobState.CANCELLED, JobState.FAILED},
+    JobState.SELECTING_FINAL_SET: {JobState.SAVING_RESULTS, JobState.CANCELLED, JobState.FAILED},
+    JobState.SAVING_RESULTS: {JobState.COMPLETED, JobState.CANCELLED, JobState.FAILED},
     JobState.COMPLETED: set(), JobState.FAILED: {JobState.QUEUED}, JobState.CANCELLED: {JobState.QUEUED},
 }
 
@@ -36,7 +45,7 @@ def transition(job: ProcessingJob, target: JobState, stage: str, progress: float
     job.current_stage = stage
     if progress is not None:
         job.progress_percent = progress
-    if target in {JobState.VALIDATING_SOURCE, JobState.EXTRACTING_AUDIO} and job.started_at is None:
+    if target in {JobState.VALIDATING_SOURCE, JobState.LOADING_TRANSCRIPT, JobState.EXTRACTING_AUDIO} and job.started_at is None:
         job.started_at = datetime.now(UTC)
     if target in {JobState.COMPLETED, JobState.FAILED, JobState.CANCELLED}:
         job.completed_at = datetime.now(UTC)
@@ -48,7 +57,7 @@ def active_job_for_video(session: Session, video_id: str) -> ProcessingJob | Non
 
 
 def recover_interrupted_jobs(session: Session) -> int:
-    interrupted = session.scalars(select(ProcessingJob).where(ProcessingJob.state.in_({JobState.VALIDATING_SOURCE, JobState.EXTRACTING_AUDIO, JobState.AUDIO_READY, JobState.ESTIMATING_COST, JobState.TRANSCRIBING, JobState.SAVING_TRANSCRIPT}))).all()
+    interrupted = session.scalars(select(ProcessingJob).where(ProcessingJob.state.in_(ACTIVE_STATES - {JobState.QUEUED, JobState.AWAITING_COST_APPROVAL}))).all()
     for job in interrupted:
         job.state = JobState.FAILED
         job.current_stage = "interrupted"

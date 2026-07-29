@@ -120,3 +120,71 @@ class TranscriptResponse(BaseModel):
     status: str
     segments: list[TranscriptPartResponse]
     words: list[TranscriptPartResponse]
+
+
+class ClipSelectionJobRequest(BaseModel):
+    requested_clip_count: int = Field(ge=1, le=10)
+    platform: str
+    duration_mode: str = "auto"
+    selection_mode: str = "balanced"
+    diversity_mode: str = "strict"
+    approve_estimated_cost: bool = False
+
+
+class ClipSelectionRunResponse(BaseModel):
+    id: str
+    video_id: str
+    transcript_id: str
+    job_id: str
+    requested_clip_count: int
+    platform: str
+    duration_mode: str
+    selection_mode: str
+    diversity_mode: str
+    provider: str
+    model: str | None
+    estimated_cost_usd: float | None
+    candidate_count: int
+    selected_count: int
+    reserve_count: int
+    rejected_count: int
+    status: str
+    created_at: datetime
+    completed_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
+class ClipCandidateResponse(BaseModel):
+    id: str
+    selection_run_id: str
+    start_seconds: float
+    end_seconds: float
+    duration_seconds: float
+    timestamp_precision: str
+    transcript_text: str
+    topic: str
+    summary: str
+    hook_type: str
+    hook_text: str
+    hook_score: float
+    first_1_second_score: float
+    first_3_seconds_score: float
+    first_5_seconds_score: float
+    retention_score: float
+    retention_reason: str
+    viral_potential_score: float
+    confidence_score: float
+    ideal_platform: str
+    suggested_title: str
+    suggested_on_screen_hook: str
+    detected_weaknesses: list[str]
+    boundary_mode: str
+    selection_status: str
+    selection_reason: str
+    rejection_reason: str | None
+    similarity_group: str | None
+
+
+class ManualSelectionRequest(BaseModel):
+    selection_status: str

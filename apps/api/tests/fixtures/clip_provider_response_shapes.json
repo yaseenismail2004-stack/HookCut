@@ -1,0 +1,30 @@
+{
+  "ultra_flat_canonical": {
+    "analyses": [
+      {
+        "candidate_id": "candidate-0",
+        "topic": "neutral topic",
+        "hook_type": "useful_promise",
+        "hook_score": 50,
+        "first_1_second_score": 45,
+        "first_3_seconds_score": 50,
+        "first_5_seconds_score": 55,
+        "retention_score": 50,
+        "standalone_score": 50,
+        "usefulness_score": 50,
+        "entertainment_score": 50,
+        "emotional_score": 50,
+        "share_score": 50,
+        "save_score": 50,
+        "comment_score": 50,
+        "loop_score": 50,
+        "visual_score": 50,
+        "confidence_score": 50,
+        "suggested_title": "neutral title",
+        "suggested_hook": "neutral hook",
+        "weakness_codes": [],
+        "analysis_note": "neutral evidence"
+      }
+    ]
+  }
+}

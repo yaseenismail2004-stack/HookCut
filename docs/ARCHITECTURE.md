@@ -27,6 +27,10 @@ The frontend only shows the project foundation and real backend connection state
 - Gemini is the primary server-only provider and OpenAI is optional. Provider selection is explicit per job; there is no automatic cross-provider fallback or automatic spend. Gemini receives only the temporary extracted audio, returns structured timestamped transcript data, and its remote file deletion must be confirmed before local transcript storage. Cost must be estimated and remain under the source-duration-scaled ceiling, or the job pauses for explicit approval.
 - Temporary audio is removed after a stored successful transcript or failed incomplete extraction.
 
+## Phase 4 selection boundary
+
+Phase 4 persists clip-selection runs and candidates in SQLite through Alembic. A local worker creates candidates from transcript segments before any provider call. Gemini analysis is server-only, receives no source media, and pauses for explicit cost approval when its price is unavailable. The worker validates structured provider output against the original candidate IDs, exact segment timing, and transcript text before it stores a result.
+
 ## Deferred boundaries
 
-Selection, rendering, captions, YouTube imports, face tracking, authentication, and downloads remain outside Phase 3.
+Rendering, captions, YouTube imports, face tracking, authentication, and downloads remain outside Phase 4.

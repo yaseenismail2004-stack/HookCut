@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import threading
 import time
 from datetime import UTC, datetime
@@ -8,10 +9,12 @@ from pathlib import Path, PurePath
 from uuid import uuid4
 
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
 
 from hookcut_api.config import Settings
-from hookcut_api.models import AudioArtifact, AudioArtifactStatus, JobState, ProcessingJob, Transcript, TranscriptSegment, TranscriptStatus, TranscriptWord
+from hookcut_api.models import AudioArtifact, AudioArtifactStatus, ClipCandidate, ClipSelectionRun, JobState, JobType, ProcessingJob, Transcript, TranscriptSegment, TranscriptStatus, TranscriptWord
+from hookcut_api.services.clip_selection import CandidateWindow, ClipAnalysisProvider, LocalSelectionEngine, ProviderCandidate, SegmentEvidence
 from hookcut_api.services.audio_extraction import AudioExtractionError, AudioMetadata, extract_audio, probe_audio
 from hookcut_api.services.jobs import JobTransitionError, recover_interrupted_jobs, source_ready, transition
 from hookcut_api.services.storage import StorageService
@@ -23,11 +26,12 @@ logger = logging.getLogger(__name__)
 class LocalJobWorker:
     """One local worker thread. It processes only jobs explicitly created through the API."""
 
-    def __init__(self, session_factory: sessionmaker[Session], storage: StorageService, settings: Settings, providers: TranscriptionProviderRegistry | None = None) -> None:
+    def __init__(self, session_factory: sessionmaker[Session], storage: StorageService, settings: Settings, providers: TranscriptionProviderRegistry | None = None, clip_analysis_providers: dict[str, ClipAnalysisProvider] | None = None) -> None:
         self._sessions = session_factory
         self._storage = storage
         self._settings = settings
         self._providers = providers or build_provider_registry(settings)
+        self._clip_analysis_providers = clip_analysis_providers or {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -63,7 +67,7 @@ class LocalJobWorker:
             transition(job, JobState.CANCELLED, "cancelled")
             session.commit()
             return None
-        transition(job, JobState.VALIDATING_SOURCE, "validating_source", 0)
+        transition(job, JobState.LOADING_TRANSCRIPT if job.job_type == JobType.CLIP_SELECTION else JobState.VALIDATING_SOURCE, "loading_transcript" if job.job_type == JobType.CLIP_SELECTION else "validating_source", 0)
         session.commit()
         return job
 
@@ -109,6 +113,9 @@ class LocalJobWorker:
         return artifact, destination, metadata
 
     def _process(self, session: Session, job: ProcessingJob) -> None:
+        if job.job_type == JobType.CLIP_SELECTION:
+            self._process_clip_selection(session, job)
+            return
         audio: AudioArtifact | None = None
         try:
             provider = self._providers.get(job.transcription_provider)
@@ -190,3 +197,111 @@ class LocalJobWorker:
         if job is not None and job.state == JobState.EXTRACTING_AUDIO:
             job.progress_percent = round(value, 1)
             session.commit()
+
+    def _process_clip_selection(self, session: Session, job: ProcessingJob) -> None:
+        run = session.scalars(select(ClipSelectionRun).where(ClipSelectionRun.job_id == job.id)).first()
+        if run is None:
+            job.state = JobState.FAILED; job.current_stage = "failed"; job.error_code = "selection_run_unavailable"; session.commit(); return
+        try:
+            transcript = session.get(Transcript, run.transcript_id)
+            if transcript is None or transcript.status != TranscriptStatus.READY:
+                raise ProviderError("transcript_unavailable", "A ready transcript is required for clip selection.")
+            segments = [SegmentEvidence(index=item.segment_index, start_seconds=item.start_seconds, end_seconds=item.end_seconds, text=item.text, confidence=item.confidence) for item in session.scalars(select(TranscriptSegment).where(TranscriptSegment.transcript_id == transcript.id).order_by(TranscriptSegment.segment_index)).all()]
+            if not segments:
+                raise ProviderError("transcript_unavailable", "The transcript has no timestamped segments.")
+            engine = LocalSelectionEngine()
+            existing = session.scalars(select(ClipCandidate).where(ClipCandidate.selection_run_id == run.id)).all()
+            transition(job, JobState.GENERATING_CANDIDATES, "generating_candidates", 15)
+            if not existing:
+                windows, rejected = engine.generate_windows(segments, run.requested_clip_count, run.duration_mode)
+                for window, reason in rejected:
+                    analysis = engine.local_analysis(window, run.platform)
+                    self._save_candidate(session, run, window, analysis, "rejected", reason, "local_pre_filter")
+                for window in windows:
+                    analysis = engine.local_analysis(window, run.platform)
+                    self._save_candidate(session, run, window, analysis, "candidate", None, "awaiting_provider_analysis")
+                session.commit()
+                existing = session.scalars(select(ClipCandidate).where(ClipCandidate.selection_run_id == run.id)).all()
+            transition(job, JobState.OPTIMIZING_BOUNDARIES, "optimizing_boundaries", 30)
+            run.candidate_count = len(existing)
+            provider = self._clip_analysis_providers.get(run.provider)
+            if provider is None or not provider.is_configured():
+                raise ProviderError("provider_not_configured", "The selected clip-analysis provider is not configured.")
+            transition(job, JobState.ESTIMATING_COST, "estimating_cost", 35)
+            estimate = provider.estimate_cost(len(existing), transcript.duration_seconds)
+            job.estimated_cost_usd = estimate; run.estimated_cost_usd = estimate
+            if not job.cost_approved:
+                transition(job, JobState.AWAITING_COST_APPROVAL, "awaiting_cost_approval")
+                job.error_code = "estimated_cost_requires_approval" if estimate is None else "cost_approval_required"
+                job.error_message = "Explicit approval is required before Gemini clip analysis."
+                run.status = "awaiting_cost_approval"; session.commit(); return
+            active = [item for item in existing if item.selection_status == "candidate"]
+            windows = [CandidateWindow(item.id, item.start_seconds, item.end_seconds, item.transcript_text, 0, 0, ["segment timing only"]) for item in active]
+            shortlist, shortlist_reasons = engine.shortlist(
+                windows, run.requested_clip_count, self._settings.gemini_clip_analysis_max_candidates_per_request,
+            )
+            shortlist_ids = {item.id for item in shortlist}
+            for item in active:
+                if item.id not in shortlist_ids:
+                    item.selection_status = "reserve"
+                    item.selection_reason = shortlist_reasons[item.id]
+            active = [item for item in active if item.id in shortlist_ids]
+            transition(job, JobState.ANALYZING_CANDIDATES, "analyzing_candidates")
+            session.commit()
+            analyses = provider.analyze_candidates(shortlist, transcript.detected_language, run.platform)
+            if self._cancelled(session, job.id):
+                transition(job, JobState.CANCELLED, "cancelled")
+                run.status = "cancelled"
+                session.commit()
+                return
+            by_id = {item.candidate_id: item for item in analyses}
+            for item in active:
+                analysis = by_id[item.id]
+                self._apply_analysis(item, analysis)
+            transition(job, JobState.SCORING_HOOKS, "scoring_hooks", 55)
+            transition(job, JobState.ESTIMATING_RETENTION, "estimating_retention", 65)
+            transition(job, JobState.DEDUPLICATING, "deduplicating", 75)
+            accepted: list[CandidateWindow] = []
+            ranked = sorted(active, key=lambda item: (item.viral_potential_score, item.hook_score, item.retention_score), reverse=True)
+            for item in ranked:
+                window = CandidateWindow(item.id, item.start_seconds, item.end_seconds, item.transcript_text, 0, 0, [])
+                duplicate = engine.duplicate_reason(window, accepted)
+                if duplicate and run.diversity_mode == "strict":
+                    item.selection_status = "rejected"; item.similarity_group, item.rejection_reason = duplicate
+                else:
+                    accepted.append(window)
+            transition(job, JobState.SELECTING_FINAL_SET, "selecting_final_set", 85)
+            remaining = [item for item in ranked if item.selection_status == "candidate"]
+            selected: list[ClipCandidate] = []
+            threshold = 70.0 if run.selection_mode == "highest_potential" else 55.0
+            for item in remaining:
+                if len(selected) < run.requested_clip_count and item.viral_potential_score >= threshold:
+                    item.selection_status = "selected"; item.selection_reason = "Selected from estimated hook, retention, and diversity evidence."; selected.append(item)
+                else:
+                    item.selection_status = "reserve"; item.selection_reason = "Reserve candidate; not selected in the final set."
+                    if run.selection_mode == "exact_count" and len(selected) < run.requested_clip_count:
+                        item.selection_status = "selected"; item.selection_reason = "Selected as a weaker Exact Count backup."; selected.append(item)
+            run.selected_count = sum(item.selection_status == "selected" for item in existing)
+            run.reserve_count = sum(item.selection_status == "reserve" for item in existing)
+            run.rejected_count = sum(item.selection_status == "rejected" for item in existing)
+            run.status = "completed"; run.completed_at = datetime.now(UTC); run.actual_cost_usd = job.actual_cost_usd
+            transition(job, JobState.SAVING_RESULTS, "saving_results", 95)
+            transition(job, JobState.COMPLETED, "completed", 100)
+            session.commit()
+        except (ProviderError, JobTransitionError, SQLAlchemyError) as error:
+            session.rollback(); current = session.get(ProcessingJob, job.id)
+            if current is not None:
+                current.state = JobState.CANCELLED if current.cancellation_requested else JobState.FAILED; current.current_stage = "cancelled" if current.cancellation_requested else "failed"; current.error_code = getattr(error, "code", "clip_selection_failed"); current.error_message = "Clip selection did not complete. Retry is available."; current.completed_at = datetime.now(UTC)
+                if run is not None: run.status = current.current_stage
+                session.commit()
+            logger.warning("event=clip_selection_failed job_id=%s exception_type=%s code=%s", job.id, type(error).__name__, getattr(error, "code", "clip_selection_failed"))
+
+    def _save_candidate(self, session: Session, run: ClipSelectionRun, window: CandidateWindow, analysis: ProviderCandidate, status: str, rejection: str | None, reason: str) -> None:
+        candidate = ClipCandidate(id=str(uuid4()), selection_run_id=run.id, video_id=run.video_id, transcript_id=run.transcript_id, start_seconds=window.start_seconds, end_seconds=window.end_seconds, duration_seconds=window.duration_seconds, timestamp_precision="segment", transcript_text=window.transcript_text, topic=analysis.topic, summary=analysis.summary, hook_type=analysis.hook_type, hook_text=analysis.hook_text, hook_score=analysis.hook_score, hook_reason=analysis.hook_reason, first_1_second_score=analysis.first_1_second_score, first_3_seconds_score=analysis.first_3_seconds_score, first_5_seconds_score=analysis.first_5_seconds_score, retention_score=analysis.retention_score, retention_reason=analysis.retention_reason, standalone_score=analysis.standalone_score, usefulness_score=analysis.usefulness_score, entertainment_score=analysis.entertainment_score, emotional_impact_score=analysis.emotional_impact_score, share_potential_score=analysis.share_potential_score, save_potential_score=analysis.save_potential_score, comment_potential_score=analysis.comment_potential_score, loop_potential_score=analysis.loop_potential_score, visual_suitability_score=analysis.visual_suitability_score, viral_potential_score=analysis.viral_potential_score, confidence_score=analysis.confidence_score, ideal_platform=analysis.ideal_platform, target_audience=analysis.target_audience, likely_viewer_reaction=analysis.likely_viewer_reaction, suggested_title=analysis.suggested_title, suggested_on_screen_hook=analysis.suggested_on_screen_hook, detected_weaknesses=json.dumps(analysis.detected_weaknesses), boundary_mode="balanced_segment", selection_status=status, selection_reason=reason, rejection_reason=rejection)
+        session.add(candidate)
+
+    def _apply_analysis(self, item: ClipCandidate, analysis: ProviderCandidate) -> None:
+        for name in ("topic", "summary", "hook_type", "hook_text", "hook_score", "hook_reason", "first_1_second_score", "first_3_seconds_score", "first_5_seconds_score", "retention_score", "retention_reason", "standalone_score", "usefulness_score", "entertainment_score", "emotional_impact_score", "share_potential_score", "save_potential_score", "comment_potential_score", "loop_potential_score", "visual_suitability_score", "confidence_score", "ideal_platform", "target_audience", "likely_viewer_reaction", "suggested_title", "suggested_on_screen_hook"):
+            setattr(item, name, getattr(analysis, name))
+        item.viral_potential_score = analysis.viral_potential_score
+        item.detected_weaknesses = json.dumps(analysis.detected_weaknesses)

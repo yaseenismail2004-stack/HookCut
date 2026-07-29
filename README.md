@@ -1,6 +1,6 @@
 # HookCut
 
-HookCut is a local-first Windows AI UGC clipper. Phase 3 adds durable local transcription jobs, FFmpeg audio extraction, a server-side Gemini-first provider abstraction with optional OpenAI, cost approval, and timestamped transcript storage. It does not select clips, render, burn subtitles, import YouTube, track faces, or authenticate users.
+HookCut is a local-first Windows AI UGC clipper. Phase 4 adds transcript-based candidate selection with segment-timestamp evidence, durable jobs, local duplicate filtering, and a server-side Gemini analysis contract. It does not render, cut, export, download, burn subtitles, import YouTube, track faces, or authenticate users.
 
 ## Windows quick start
 
@@ -52,3 +52,7 @@ npm run verify
 ```
 
 See [Development](docs/DEVELOPMENT.md), [Architecture](docs/ARCHITECTURE.md), and [Phases](docs/PHASES.md).
+
+## Clip selection (Phase 4)
+
+After a completed transcript, choose platform, count, duration, selection mode, and diversity mode. HookCut first creates candidates locally from real transcript segments, then pauses for explicit approval before any Gemini analysis when cost cannot be calculated. Results are estimates only and disclose that timing is segment based. See [candidate generation](docs/CANDIDATE_GENERATION.md), [clip scoring](docs/CLIP_SCORING.md), and [duplicate filtering](docs/DUPLICATE_FILTERING.md).

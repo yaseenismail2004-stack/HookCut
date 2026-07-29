@@ -2,11 +2,11 @@
 
 ## Active task
 
-Validate and complete the approved Gemini-primary transcription-provider integration.
+Perform one explicitly authorized live Gemini Generate Content verification for the Phase 4 ultra-flat contract.
 
 ## Goal
 
-Verify the existing Gemini-primary Phase 3 transcription path using one explicitly authorized local Arabic or Iraqi Arabic source, only after local validation passes. OpenAI remains optional and is not retried while its external rate limit remains unresolved. Do not begin Phase 4 or implement candidate generation, scoring, clip selection, rendering, subtitles, YouTube imports, face tracking, authentication, or publishing. Never expose secrets or private speech content.
+Use the verified ultra-flat raw JSON Schema contract and Generate Content transport for exactly one Gemini request. Canonical IDs, transcript excerpts, timestamps, duration, selection status, and final selection remain local. Do not retry externally. Do not render, cut, export, download, subtitle, import YouTube video, track faces, authenticate, or publish. Never expose secrets or private speech content.
 
 ## Expected files
 
@@ -16,32 +16,48 @@ Verify the existing Gemini-primary Phase 3 transcription path using one explicit
 - `NEXT_STEPS.md`
 - `.project-events.jsonl`
 - `STATE.md`
-- `docs/LIVE_TRANSCRIPTION_VERIFICATION.md`
-- Existing Gemini integration files already modified in the working tree, only when a validation defect requires a safe repair.
+- `apps/api/alembic/versions/*`
+- `apps/api/src/hookcut_api/models.py`
+- `apps/api/src/hookcut_api/schemas.py`
+- `apps/api/src/hookcut_api/routers/*`
+- `apps/api/src/hookcut_api/services/*`
+- `apps/api/tests/*`
+- `apps/web/src/components/*`
+- `apps/web/src/lib/*`
+- `docs/CANDIDATE_GENERATION.md`
+- `docs/CLIP_SCORING.md`
+- `docs/DUPLICATE_FILTERING.md`
+- `docs/PHASE_4_VERIFICATION.md`
+- `docs/PHASE_4_COMPACT_CONTRACT.md`
+- `docs/PHASE_4_ULTRA_FLAT_CONTRACT.md`
+- `README.md`, `docs/ARCHITECTURE.md`, `docs/PHASES.md`
+- Project tracking files and `.project-events.jsonl`
 
 ## Checklist
 
-- [x] Read tracking context, project state, instructions, the bounded integration review, and relevant provider/media guidance.
-- [x] Confirm the locked decision: Gemini primary, OpenAI optional, no automatic fallback.
-- [x] Inspect the existing unverified Gemini implementation and local configuration presence without revealing secret values.
-- [x] Run the applicable backend and frontend validation suite.
-- [x] Add offline provider-contract coverage for remote audio cleanup and cleanup failure.
-- [x] Run one explicitly approved live Gemini transcription; it reached the provider stage and failed safely without persisting a transcript.
-- [x] Document private-data-safe evidence and quality observations.
-- [x] Run one fresh explicitly approved Gemini transcription after confirming the configured model is `gemini-3.6-flash`; it failed safely with HTTP 400 before transcript persistence.
-- [x] Run one fresh explicitly approved Gemini transcription after local verification of the corrected Interactions `response_format` wrapper; the real transcript was persisted and retrieved safely.
+- [x] Read the locked requirements, project tracking context, current state, skills, rubric, and required test cases.
+- [x] Verify the committed Phase 3.1 baseline: frontend lint/typecheck/tests/build, backend compile/mypy/tests, and Loop doctor.
+- [x] Add database migration, durable selection models, state transitions, local pipeline, and provider contract.
+- [x] Add API endpoints, cost gate, retry/cancellation, and manual selection adjustment.
+- [x] Add the localized frontend setup, stage state, result lists, and baseline accessibility test.
+- [x] Repair the local Gemini response normalization boundary and add sanitized structural fixtures; no provider call was made.
+- [x] Replace the oversized provider contract with a compact semantic-only analysis contract and deterministic local final selection.
+- [x] Migrate Phase 4 clip analysis from Interactions to Generate Content and verify the transport locally.
+- [x] Diagnose the last Generate Content failure from retained privacy-safe metadata and replace the provider response with an ultra-flat raw JSON Schema contract; no provider request was made.
+- [ ] Complete deterministic, integration, security, and one authorized Generate Content live-provider verification (blocked: the one authorized request returned `clip_analysis_failed`).
 - [ ] Commit and push only if all required checks and the real provider test pass.
 
 ## Tests required
 
 - Frontend lint, typecheck, tests, and production build.
-- Backend compile, type checking, tests, startup, worker shutdown, and live Gemini flow.
+- Backend migration, compile, type checking, tests, startup, worker shutdown, and local integration.
+- One explicitly approved live Gemini transcript-only analysis after cost handling.
 - Security, Git, and Loop doctor checks.
 
 ## Current blocker
 
-No implementation blocker remains for the Gemini verification. The real approved request completed with the configured `gemini-3.6-flash` model, persisted a timestamped transcript, and cleaned the local audio artifact. OpenAI remains externally rate limited and must not be retried.
+The new human-authorized bounded ultra-flat request succeeded. It reused the existing candidate pool, passed validation, and completed the durable local selection run. No second provider request was sent.
 
 ## Task status
 
-Completed and pushed to `origin/codex-live`. Do not merge or start Phase 4.
+Completed and verified pending the authorized Git checkpoint. Do not send another provider request, begin Phase 5, merge, or force-push. A temporary ignored Alembic validation database remains because the local deletion policy rejected its removal command.

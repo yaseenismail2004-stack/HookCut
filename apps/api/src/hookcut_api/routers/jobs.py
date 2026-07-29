@@ -34,7 +34,8 @@ def get_providers(request: Request) -> TranscriptionProviderRegistry:
 
 
 def _job_response(job: ProcessingJob) -> JobResponse:
-    return JobResponse(id=job.id, video_id=job.video_id, state=str(job.state), current_stage=job.current_stage, progress_percent=job.progress_percent, progress_indeterminate=job.state in {JobState.TRANSCRIBING, JobState.SAVING_TRANSCRIPT}, estimated_cost_usd=job.estimated_cost_usd, cost_approval_required=job.state == JobState.AWAITING_COST_APPROVAL, retry_available=job.state in {JobState.FAILED, JobState.CANCELLED} and job.retry_count < job.max_retries, cancellation_available=job.state in ACTIVE_STATES and job.state != JobState.AWAITING_COST_APPROVAL, error_code=job.error_code, error_key=job.error_code, created_at=job.created_at, started_at=job.started_at, completed_at=job.completed_at)
+    indeterminate_states = {JobState.TRANSCRIBING, JobState.SAVING_TRANSCRIPT, JobState.ANALYZING_CANDIDATES}
+    return JobResponse(id=job.id, video_id=job.video_id, state=str(job.state), current_stage=job.current_stage, progress_percent=job.progress_percent, progress_indeterminate=job.state in indeterminate_states, estimated_cost_usd=job.estimated_cost_usd, cost_approval_required=job.state == JobState.AWAITING_COST_APPROVAL, retry_available=job.state in {JobState.FAILED, JobState.CANCELLED} and job.retry_count < job.max_retries, cancellation_available=job.state in ACTIVE_STATES and job.state != JobState.AWAITING_COST_APPROVAL, error_code=job.error_code, error_key=job.error_code, created_at=job.created_at, started_at=job.started_at, completed_at=job.completed_at)
 
 
 @router.post("/api/videos/{video_id}/transcription-jobs", response_model=JobResponse, status_code=status.HTTP_201_CREATED)
