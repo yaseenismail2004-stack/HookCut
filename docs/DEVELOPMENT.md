@@ -20,6 +20,8 @@ npm run dev
 
 The web app is available at `http://127.0.0.1:3000`; the API is available at `http://127.0.0.1:8000`.
 
+`npm run dev` writes local development output to `.local/api-dev.out.log`, `.local/api-dev.err.log`, `.local/web-dev.out.log`, and `.local/web-dev.err.log`. These files are Git-ignored. Set `NEXT_PUBLIC_UPLOAD_REQUEST_TIMEOUT_MS` in `apps/web/.env` to override the 180000 ms browser upload-and-validation timeout.
+
 To stop only processes recorded by this project:
 
 ```powershell

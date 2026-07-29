@@ -8,92 +8,40 @@ type Video = { id: string; original_filename: string; file_size_bytes: number; c
 
 const api = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
 const allowed = [".mp4", ".mov", ".mkv", ".webm"];
+const timeoutFromEnvironment = Number(process.env.NEXT_PUBLIC_UPLOAD_REQUEST_TIMEOUT_MS ?? "180000");
+const uploadTimeoutMs = Number.isFinite(timeoutFromEnvironment) && timeoutFromEnvironment >= 10_000 ? timeoutFromEnvironment : 180_000;
 const copy = {
-  en: { title: "HookCut", language: "العربية", choose: "Choose video", upload: "Upload and validate", cancel: "Cancel upload", retry: "Try again", reset: "Reset", ready: "Ready", validating: "Validating media…", drop: "Drop a local video here or choose a file", note: "MP4, MOV, MKV, or WebM · up to 4 GB", next: "Video is ready for the next phase: audio extraction and transcription.", delete: "Delete video", confirm: "Permanently delete this video?", yes: "Delete", no: "Cancel", connected: "Backend connected", disconnected: "Backend disconnected", retryHealth: "Retry health check" },
-  ar: { title: "هوك كت", language: "English", choose: "اختر فيديو", upload: "ارفع وتحقق", cancel: "إلغاء الرفع", retry: "حاول مجدداً", reset: "إعادة تعيين", ready: "جاهز", validating: "يتم التحقق من الوسائط…", drop: "اسحب فيديو محلياً هنا أو اختر ملفاً", note: "MP4 أو MOV أو MKV أو WebM · حتى 4GB", next: "الفيديو جاهز للمرحلة القادمة: استخراج الصوت والتفريغ.", delete: "حذف الفيديو", confirm: "هل تريد حذف هذا الفيديو نهائياً؟", yes: "حذف", no: "إلغاء", connected: "الخادم متصل", disconnected: "الخادم غير متصل", retryHealth: "أعد فحص الخادم" },
+  en: { title: "HookCut", language: "Arabic", choose: "Choose video", upload: "Upload and validate", cancel: "Cancel upload", retry: "Try again", reset: "Reset", ready: "Ready", validating: "Validating media…", drop: "Drop a local video here or choose a file", note: "MP4, MOV, MKV, or WebM · up to 4 GB", next: "Video is ready for the next phase: audio extraction and transcription.", delete: "Delete video", confirm: "Permanently delete this video?", yes: "Delete", no: "Cancel", connected: "Backend connected", disconnected: "Backend disconnected", retryHealth: "Retry health check" },
+  ar: { title: "\u0647\u0648\u0643 \u0643\u062a", language: "English", choose: "\u0627\u062e\u062a\u0631 \u0641\u064a\u062f\u064a\u0648", upload: "\u0627\u0631\u0641\u0639 \u0648\u062a\u062d\u0642\u0642", cancel: "\u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0631\u0641\u0639", retry: "\u062d\u0627\u0648\u0644 \u0645\u062c\u062f\u062f\u0627\u064b", reset: "\u0625\u0639\u0627\u062f\u0629 \u062a\u0639\u064a\u064a\u0646", ready: "\u062c\u0627\u0647\u0632", validating: "\u064a\u062a\u0645 \u0627\u0644\u062a\u062d\u0642\u0642 \u0645\u0646 \u0627\u0644\u0648\u0633\u0627\u0626\u0637…", drop: "\u0627\u0633\u062d\u0628 \u0641\u064a\u062f\u064a\u0648 \u0645\u062d\u0644\u064a\u0627\u064b \u0647\u0646\u0627 \u0623\u0648 \u0627\u062e\u062a\u0631 \u0645\u0644\u0641\u0627\u064b", note: "MP4 \u0623\u0648 MOV \u0623\u0648 MKV \u0623\u0648 WebM · \u062d\u062a\u0649 4GB", next: "\u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u062c\u0627\u0647\u0632 \u0644\u0644\u0645\u0631\u062d\u0644\u0629 \u0627\u0644\u0642\u0627\u062f\u0645\u0629: \u0627\u0633\u062a\u062e\u0631\u0627\u062c \u0627\u0644\u0635\u0648\u062a \u0648\u0627\u0644\u062a\u0641\u0631\u064a\u063a.", delete: "\u062d\u0630\u0641 \u0627\u0644\u0641\u064a\u062f\u064a\u0648", confirm: "\u0647\u0644 \u062a\u0631\u064a\u062f \u062d\u0630\u0641 \u0647\u0630\u0627 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0646\u0647\u0627\u0626\u064a\u0627\u064b\u061f", yes: "\u062d\u0630\u0641", no: "\u0625\u0644\u063a\u0627\u0621", connected: "\u0627\u0644\u062e\u0627\u062f\u0645 \u0645\u062a\u0635\u0644", disconnected: "\u0627\u0644\u062e\u0627\u062f\u0645 \u063a\u064a\u0631 \u0645\u062a\u0635\u0644", retryHealth: "\u0623\u0639\u062f \u0641\u062d\u0635 \u0627\u0644\u062e\u0627\u062f\u0645" },
 } as const;
 const errors: Record<string, Record<Locale, string>> = {
-  unsupported_format: { en: "Unsupported video format.", ar: "صيغة الفيديو غير مدعومة." },
-  file_too_large: { en: "File exceeds the upload limit.", ar: "حجم الملف يتجاوز حد الرفع." },
-  video_too_short: { en: "Video must be at least 20 seconds.", ar: "يجب أن تكون مدة الفيديو 20 ثانية على الأقل." },
-  video_too_long: { en: "Video exceeds the maximum duration.", ar: "مدة الفيديو تتجاوز الحد الأقصى." },
-  resolution_too_high: { en: "Video resolution exceeds 4K.", ar: "دقة الفيديو تتجاوز 4K." },
-  missing_video_stream: { en: "Video stream is missing.", ar: "مسار الفيديو مفقود." },
-  missing_audio_stream: { en: "Usable audio stream is missing.", ar: "مسار صوت صالح مفقود." },
-  corrupt_media: { en: "Media cannot be read.", ar: "لا يمكن قراءة الوسائط." },
-  upload_cancelled: { en: "Upload was cancelled.", ar: "تم إلغاء الرفع." },
-  storage_error: { en: "Local storage failed.", ar: "فشل التخزين المحلي." },
-  validation_timeout: { en: "Validation timed out.", ar: "انتهت مهلة التحقق." },
+  unsupported_format: { en: "Unsupported video format.", ar: "\u0635\u064a\u063a\u0629 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u063a\u064a\u0631 \u0645\u062f\u0639\u0648\u0645\u0629." }, file_too_large: { en: "File exceeds the upload limit.", ar: "\u062d\u062c\u0645 \u0627\u0644\u0645\u0644\u0641 \u064a\u062a\u062c\u0627\u0648\u0632 \u062d\u062f \u0627\u0644\u0631\u0641\u0639." }, video_too_short: { en: "Video must be at least 20 seconds.", ar: "\u064a\u062c\u0628 \u0623\u0646 \u062a\u0643\u0648\u0646 \u0645\u062f\u0629 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 20 \u062b\u0627\u0646\u064a\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644." }, video_too_long: { en: "Video exceeds the maximum duration.", ar: "\u0645\u062f\u0629 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u062a\u062a\u062c\u0627\u0648\u0632 \u0627\u0644\u062d\u062f \u0627\u0644\u0623\u0642\u0635\u0649." }, resolution_too_high: { en: "Video resolution exceeds 4K.", ar: "\u062f\u0642\u0629 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u062a\u062a\u062c\u0627\u0648\u0632 4K." }, missing_video_stream: { en: "Video stream is missing.", ar: "\u0645\u0633\u0627\u0631 \u0627\u0644\u0641\u064a\u062f\u064a\u0648 \u0645\u0641\u0642\u0648\u062f." }, missing_audio_stream: { en: "Usable audio stream is missing.", ar: "\u0645\u0633\u0627\u0631 \u0635\u0648\u062a \u0635\u0627\u0644\u062d \u0645\u0641\u0642\u0648\u062f." }, corrupt_media: { en: "Media cannot be read.", ar: "\u0644\u0627 \u064a\u0645\u0643\u0646 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0648\u0633\u0627\u0626\u0637." }, upload_cancelled: { en: "Upload was cancelled.", ar: "\u062a\u0645 \u0625\u0644\u063a\u0627\u0621 \u0627\u0644\u0631\u0641\u0639." }, storage_error: { en: "Local storage failed.", ar: "\u0641\u0634\u0644 \u0627\u0644\u062a\u062e\u0632\u064a\u0646 \u0627\u0644\u0645\u062d\u0644\u064a." }, validation_timeout: { en: "Validation timed out.", ar: "\u0627\u0646\u062a\u0647\u062a \u0645\u0647\u0644\u0629 \u0627\u0644\u062a\u062d\u0642\u0642." }, request_timeout: { en: "The server took too long to validate this upload.", ar: "\u0627\u0633\u062a\u063a\u0631\u0642 \u0627\u0644\u062e\u0627\u062f\u0645 \u0648\u0642\u062a\u0627\u064b \u0637\u0648\u064a\u0644\u0627\u064b \u0641\u064a \u0627\u0644\u062a\u062d\u0642\u0642." }, network_error: { en: "Could not reach the upload service.", ar: "\u062a\u0639\u0630\u0631 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u062e\u062f\u0645\u0629 \u0627\u0644\u0631\u0641\u0639." }, invalid_response: { en: "The server returned an invalid upload response.", ar: "\u0623\u0639\u0627\u062f \u0627\u0644\u062e\u0627\u062f\u0645 \u0627\u0633\u062a\u062c\u0627\u0628\u0629 \u0631\u0641\u0639 \u063a\u064a\u0631 \u0635\u0627\u0644\u062d\u0629." },
 };
 
+function parseVideoResponse(responseText: string): Video {
+  const payload: unknown = JSON.parse(responseText);
+  if (!payload || typeof payload !== "object" || !("id" in payload) || !("original_filename" in payload) || !("duration_seconds" in payload)) throw new Error("invalid_response");
+  return payload as Video;
+}
+
 export function FoundationDashboard() {
-  const [locale, setLocale] = useState<Locale>("en");
-  const [connected, setConnected] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [state, setState] = useState<UploadState>("idle");
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [video, setVideo] = useState<Video | null>(null);
-  const [confirm, setConfirm] = useState(false);
-  const xhr = useRef<XMLHttpRequest | null>(null);
-  const t = copy[locale];
-
-  const health = useCallback(async () => {
-    try {
-      const response = await fetch(`${api}/api/health`, { cache: "no-store" });
-      const payload = await response.json();
-      setConnected(response.ok && payload.status === "ok" && payload.service === "hookcut-api");
-    } catch { setConnected(false); }
-  }, []);
-  useEffect(() => {
-    const timer = window.setTimeout(() => { void health(); }, 0);
-    return () => window.clearTimeout(timer);
-  }, [health]);
-
-  const select = (candidate: File | undefined) => {
-    if (!candidate) return;
-    const extension = `.${candidate.name.split(".").pop()?.toLowerCase()}`;
-    setVideo(null); setError(null); setProgress(0);
-    if (!allowed.includes(extension) || candidate.size > 4 * 1024 * 1024 * 1024) {
-      setFile(null); setState("rejected"); setError(!allowed.includes(extension) ? "unsupported_format" : "file_too_large"); return;
-    }
-    setFile(candidate); setState("idle");
-  };
+  const [locale, setLocale] = useState<Locale>("en"); const [connected, setConnected] = useState(false); const [file, setFile] = useState<File | null>(null); const [state, setState] = useState<UploadState>("idle"); const [progress, setProgress] = useState(0); const [error, setError] = useState<string | null>(null); const [video, setVideo] = useState<Video | null>(null); const [confirm, setConfirm] = useState(false); const xhr = useRef<XMLHttpRequest | null>(null); const t = copy[locale];
+  const health = useCallback(async () => { try { const response = await fetch(`${api}/api/health`, { cache: "no-store" }); const payload = await response.json(); setConnected(response.ok && payload.status === "ok" && payload.service === "hookcut-api"); } catch { setConnected(false); } }, []);
+  useEffect(() => { const timer = window.setTimeout(() => { void health(); }, 0); return () => window.clearTimeout(timer); }, [health]);
+  const select = (candidate: File | undefined) => { if (!candidate) return; const extension = `.${candidate.name.split(".").pop()?.toLowerCase()}`; setVideo(null); setError(null); setProgress(0); if (!allowed.includes(extension) || candidate.size > 4 * 1024 * 1024 * 1024) { setFile(null); setState("rejected"); setError(!allowed.includes(extension) ? "unsupported_format" : "file_too_large"); return; } setFile(candidate); setState("idle"); };
+  const fail = (code: string) => { console.info("[hookcut-upload] response-received", { outcome: "error", code }); setError(code); setState("rejected"); };
   const upload = () => {
-    if (!file) return;
-    const request = new XMLHttpRequest(); xhr.current = request;
-    setState("uploading"); setProgress(0); setError(null);
-    request.open("POST", `${api}/api/videos/upload`);
+    if (!file) return; const request = new XMLHttpRequest(); xhr.current = request; setState("uploading"); setProgress(0); setError(null); request.open("POST", `${api}/api/videos/upload`); request.timeout = uploadTimeoutMs;
     request.upload.onprogress = (event) => { if (event.lengthComputable) setProgress(Math.round((event.loaded / event.total) * 100)); };
-    request.upload.onload = () => { if (request.status === 201) setState("validating"); };
-    request.upload.onabort = () => { setState("rejected"); setError("upload_cancelled"); };
-    request.upload.onloadend = () => {
-      if (request.status === 0) return;
-      if (request.status >= 200 && request.status < 300) { setVideo(JSON.parse(request.responseText) as Video); setState("success"); return; }
-      try { setError((JSON.parse(request.responseText) as { detail: { code: string } }).detail.code); } catch { setError("storage_error"); }
-      setState("rejected");
-    };
+    request.upload.onload = () => { setProgress(100); setState("validating"); console.info("[hookcut-upload] upload-body-completed"); };
+    request.onload = () => { console.info("[hookcut-upload] response-received", { status: request.status }); if (request.status >= 200 && request.status < 300) { try { setVideo(parseVideoResponse(request.responseText)); setState("success"); } catch { fail("invalid_response"); } return; } try { const body = JSON.parse(request.responseText) as { detail?: { code?: string } }; fail(body.detail?.code ?? "storage_error"); } catch { fail("storage_error"); } };
+    request.onerror = () => fail("network_error"); request.ontimeout = () => fail("request_timeout"); request.onabort = () => fail("upload_cancelled");
     const data = new FormData(); data.append("file", file); request.send(data);
   };
-  const reset = () => { xhr.current?.abort(); xhr.current = null; setFile(null); setVideo(null); setError(null); setProgress(0); setState("idle"); };
-  const deleteVideo = async () => {
-    if (!video) return;
-    const response = await fetch(`${api}/api/videos/${video.id}`, { method: "DELETE" });
-    if (response.ok) reset(); else setError("storage_error");
-    setConfirm(false);
-  };
+  const reset = () => { if (state === "uploading") xhr.current?.abort(); xhr.current = null; setFile(null); setVideo(null); setError(null); setProgress(0); setState("idle"); };
+  const deleteVideo = async () => { if (!video) return; const response = await fetch(`${api}/api/videos/${video.id}`, { method: "DELETE" }); if (response.ok) reset(); else setError("storage_error"); setConfirm(false); };
   const message = error ? (errors[error]?.[locale] ?? errors.storage_error[locale]) : null;
-
-  return <main dir={locale === "ar" ? "rtl" : "ltr"} lang={locale} className="min-h-screen p-5 sm:p-10">
-    <section className="mx-auto max-w-3xl rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-xl">
-      <header className="flex items-center justify-between gap-4"><div><p className="text-sm text-[var(--accent)]">HOOKCUT / PHASE 2</p><h1 className="text-4xl font-bold">{t.title}</h1></div><button type="button" onClick={() => setLocale(locale === "en" ? "ar" : "en")} className="rounded border p-2">{t.language}</button></header>
-      <p className="mt-4 text-sm" aria-live="polite">{connected ? t.connected : t.disconnected} <button type="button" onClick={() => void health()} aria-label={t.retryHealth} className="underline">↻</button></p>
-      {!video && <div className="mt-8"><label onDrop={(event: DragEvent) => { event.preventDefault(); select(event.dataTransfer.files[0]); }} onDragOver={(event) => event.preventDefault()} className="block rounded-2xl border-2 border-dashed border-[var(--line)] p-10 text-center"><input aria-label={t.choose} type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" className="sr-only" onChange={(event: ChangeEvent<HTMLInputElement>) => select(event.target.files?.[0])}/><span>{file ? file.name : t.drop}</span><small className="mt-2 block text-[var(--muted)]">{t.note}</small></label>
-        {file && <p className="mt-3 break-all text-sm">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>}
-        {state === "uploading" && <><progress className="mt-4 w-full" value={progress} max="100" aria-label="Upload progress" />{progress}%</>}{state === "validating" && <p className="mt-4">{t.validating}</p>}{message && <p role="alert" className="mt-4 text-rose-500">{message}</p>}
-        <div className="mt-5 flex flex-wrap gap-3">{file && state !== "uploading" && state !== "validating" && <button type="button" onClick={upload} className="rounded bg-[var(--accent)] px-4 py-2 text-white">{state === "rejected" ? t.retry : t.upload}</button>}{state === "uploading" && <button type="button" onClick={() => xhr.current?.abort()} className="rounded border px-4 py-2">{t.cancel}</button>}{(file || state === "rejected") && state !== "uploading" && <button type="button" onClick={reset} className="rounded border px-4 py-2">{t.reset}</button>}</div></div>}
-      {video && <section className="mt-8 rounded-2xl border border-emerald-500/40 p-5"><h2 className="text-xl font-bold">{t.ready}</h2><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt>File</dt><dd className="break-all">{video.original_filename}</dd></div><div><dt>Size</dt><dd>{(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB</dd></div><div><dt>Duration</dt><dd>{video.duration_seconds.toFixed(2)} s</dd></div><div><dt>Video</dt><dd>{video.width}×{video.height} · {video.frame_rate} fps</dd></div><div><dt>Container</dt><dd>{video.container}</dd></div><div><dt>Codecs</dt><dd>{video.video_codec} / {video.audio_codec}</dd></div></dl><p className="mt-5">{t.next}</p><button type="button" onClick={() => setConfirm(true)} className="mt-5 rounded border border-rose-500 px-4 py-2 text-rose-500">{t.delete}</button></section>}
-      {confirm && <div role="dialog" aria-modal="true" className="mt-5 rounded border p-4"><p>{t.confirm}</p><button type="button" onClick={() => void deleteVideo()} className="mt-3 rounded bg-rose-600 px-3 py-2 text-white">{t.yes}</button><button type="button" onClick={() => setConfirm(false)} className="m-3 underline">{t.no}</button></div>}
-    </section>
-  </main>;
+  return <main dir={locale === "ar" ? "rtl" : "ltr"} lang={locale} className="min-h-screen p-5 sm:p-10"><section className="mx-auto max-w-3xl rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-xl"><header className="flex items-center justify-between gap-4"><div><p className="text-sm text-[var(--accent)]">HOOKCUT / PHASE 2</p><h1 className="text-4xl font-bold">{t.title}</h1></div><button type="button" onClick={() => setLocale(locale === "en" ? "ar" : "en")} className="rounded border p-2">{t.language}</button></header><p className="mt-4 text-sm" aria-live="polite">{connected ? t.connected : t.disconnected} <button type="button" onClick={() => void health()} aria-label={t.retryHealth} className="underline">Retry</button></p>
+    {!video && <div className="mt-8"><label onDrop={(event: DragEvent) => { event.preventDefault(); select(event.dataTransfer.files[0]); }} onDragOver={(event) => event.preventDefault()} className="block rounded-2xl border-2 border-dashed border-[var(--line)] p-10 text-center"><input aria-label={t.choose} type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" className="sr-only" onChange={(event: ChangeEvent<HTMLInputElement>) => select(event.target.files?.[0])}/><span>{file ? file.name : t.drop}</span><small className="mt-2 block text-[var(--muted)]">{t.note}</small></label>{file && <p className="mt-3 break-all text-sm">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>}{state === "uploading" && <><progress className="mt-4 w-full" value={progress} max="100" aria-label="Upload progress" />{progress}%</>}{state === "validating" && <div className="mt-4" aria-live="polite"><progress aria-label="Validation in progress" /> <span>{t.validating}</span></div>}{message && <p role="alert" className="mt-4 text-rose-500">{message}</p>}<div className="mt-5 flex flex-wrap gap-3">{file && state !== "uploading" && state !== "validating" && <button type="button" onClick={upload} className="rounded bg-[var(--accent)] px-4 py-2 text-white">{state === "rejected" ? t.retry : t.upload}</button>}{state === "uploading" && <button type="button" onClick={() => xhr.current?.abort()} className="rounded border px-4 py-2">{t.cancel}</button>}{(file || state === "rejected") && state !== "uploading" && state !== "validating" && <button type="button" onClick={reset} className="rounded border px-4 py-2">{t.reset}</button>}</div></div>}
+    {video && <section className="mt-8 rounded-2xl border border-emerald-500/40 p-5"><h2 className="text-xl font-bold">{t.ready}</h2><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt>File</dt><dd className="break-all">{video.original_filename}</dd></div><div><dt>Size</dt><dd>{(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB</dd></div><div><dt>Duration</dt><dd>{video.duration_seconds.toFixed(2)} s</dd></div><div><dt>Video</dt><dd>{video.width}×{video.height} · {video.frame_rate} fps</dd></div><div><dt>Container</dt><dd>{video.container}</dd></div><div><dt>Codecs</dt><dd>{video.video_codec} / {video.audio_codec}</dd></div></dl><p className="mt-5">{t.next}</p><button type="button" onClick={() => setConfirm(true)} className="mt-5 rounded border border-rose-500 px-4 py-2 text-rose-500">{t.delete}</button></section>}{confirm && <div role="dialog" aria-modal="true" className="mt-5 rounded border p-4"><p>{t.confirm}</p><button type="button" onClick={() => void deleteVideo()} className="mt-3 rounded bg-rose-600 px-3 py-2 text-white">{t.yes}</button><button type="button" onClick={() => setConfirm(false)} className="m-3 underline">{t.no}</button></div>}</section></main>;
 }

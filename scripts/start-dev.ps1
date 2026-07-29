@@ -11,6 +11,10 @@ $python = Join-Path $apiRoot '.venv\Scripts\python.exe'
 $nextCli = Join-Path $webRoot 'node_modules\next\dist\bin\next'
 $stateDirectory = Join-Path $projectRoot '.local'
 $stateFile = Join-Path $stateDirectory 'dev-services.json'
+$apiOutputLog = Join-Path $stateDirectory 'api-dev.out.log'
+$apiErrorLog = Join-Path $stateDirectory 'api-dev.err.log'
+$webOutputLog = Join-Path $stateDirectory 'web-dev.out.log'
+$webErrorLog = Join-Path $stateDirectory 'web-dev.err.log'
 
 function Test-TrackedProcess {
     param([pscustomobject] $Service)
@@ -44,18 +48,19 @@ try {
 }
 
 New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
+Remove-Item -LiteralPath $apiOutputLog, $apiErrorLog, $webOutputLog, $webErrorLog -Force -ErrorAction SilentlyContinue
 $services = @()
-$apiProcess = Start-Process -FilePath $python -ArgumentList @('-m', 'uvicorn', 'hookcut_api.main:app', '--host', '127.0.0.1', '--port', '8000') -WorkingDirectory $apiRoot -PassThru
+$apiProcess = Start-Process -FilePath $python -ArgumentList @('-m', 'uvicorn', 'hookcut_api.main:app', '--host', '127.0.0.1', '--port', '8000') -WorkingDirectory $apiRoot -RedirectStandardOutput $apiOutputLog -RedirectStandardError $apiErrorLog -PassThru
 $services += [pscustomobject]@{ name = 'api'; pid = $apiProcess.Id; started_at_utc = $apiProcess.StartTime.ToUniversalTime().ToString('o') }
 
 if (-not $ApiOnly) {
-    $webProcess = Start-Process -FilePath 'node.exe' -ArgumentList @($nextCli, 'dev', '--hostname', '127.0.0.1', '--port', '3000') -WorkingDirectory $webRoot -PassThru
+    $webProcess = Start-Process -FilePath 'node.exe' -ArgumentList @($nextCli, 'dev', '--hostname', '127.0.0.1', '--port', '3000') -WorkingDirectory $webRoot -RedirectStandardOutput $webOutputLog -RedirectStandardError $webErrorLog -PassThru
     $services += [pscustomobject]@{ name = 'web'; pid = $webProcess.Id; started_at_utc = $webProcess.StartTime.ToUniversalTime().ToString('o') }
 }
 
 @{ services = $services } | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding utf8
 if ($ApiOnly) {
-    Write-Host 'HookCut API service started: http://127.0.0.1:8000'
+    Write-Host 'HookCut API service started: http://127.0.0.1:8000 (logs: .local\api-dev.out.log)'
 } else {
-    Write-Host 'HookCut development services started. API: http://127.0.0.1:8000 | Web: http://127.0.0.1:3000'
+    Write-Host 'HookCut development services started. API: http://127.0.0.1:8000 | Web: http://127.0.0.1:3000 | Logs: .local\*-dev.*.log'
 }

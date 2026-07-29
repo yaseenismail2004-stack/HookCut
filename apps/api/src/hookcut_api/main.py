@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
 from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI
@@ -15,7 +16,20 @@ from hookcut_api.services.capabilities import detect_capabilities
 from hookcut_api.services.storage import StorageService
 
 
+def _configure_development_logging() -> None:
+    logger = logging.getLogger("hookcut_api")
+    logger.setLevel(logging.INFO)
+    if any(handler.get_name() == "hookcut-development" for handler in logger.handlers):
+        return
+    handler = logging.StreamHandler()
+    handler.set_name("hookcut-development")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    logger.addHandler(handler)
+    logger.propagate = False
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
+    _configure_development_logging()
     configured_settings = settings or get_settings()
 
     @asynccontextmanager

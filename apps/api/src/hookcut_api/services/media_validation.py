@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 
 SUPPORTED_EXTENSIONS = {".mp4", ".mov", ".mkv", ".webm"}
@@ -43,6 +46,7 @@ def _frame_rate(value: str) -> float:
 
 def probe_and_validate(path: Path, extension: str, max_duration_seconds: int, max_resolution: int = 3840) -> MediaMetadata:
     try:
+        logger.info("event=ffprobe_started")
         completed = subprocess.run(
             ["ffprobe", "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
             check=False,
@@ -51,10 +55,14 @@ def probe_and_validate(path: Path, extension: str, max_duration_seconds: int, ma
             timeout=20,
         )
     except subprocess.TimeoutExpired as error:
+        logger.warning("event=ffprobe_timed_out")
         raise MediaValidationError("validation_timeout", "Media validation timed out.") from error
     except OSError as error:
+        logger.exception("event=ffprobe_unavailable")
         raise MediaValidationError("storage_error", "Media validator is unavailable.") from error
+    logger.info("event=ffprobe_completed return_code=%s", completed.returncode)
     if completed.returncode != 0:
+        logger.warning("event=ffprobe_failed return_code=%s", completed.returncode)
         raise MediaValidationError("corrupt_media", "The uploaded file is not readable media.")
     try:
         payload = json.loads(completed.stdout)
