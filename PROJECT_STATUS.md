@@ -42,10 +42,10 @@ Phase 3 is the current project phase. Its committed durable transcription pipeli
 
 ## Git state
 
-- Latest commit: `79d7b8c feat: add durable transcription job pipeline`.
+- Application verification commit: `be7757f test: verify live Gemini transcription pipeline`.
 - Current branch: `codex-live`, tracking `origin/codex-live`.
 - Remote: private GitHub `origin` is configured locally for `yaseenismail2004-stack/HookCut`.
-- Sync state: the verified commit `79d7b8c` has been pushed to `origin/codex-live`. No unverified working-tree change, merge, or force-push was included.
+- Sync state: the verified commit `79d7b8c` has been pushed to `origin/codex-live`. The verified Gemini checkpoint `be7757f` is ready for the authorized push. No unverified working-tree change, merge, or force-push is included.
 
 ## Next authorized phase
 
