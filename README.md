@@ -1,6 +1,6 @@
 # HookCut
 
-HookCut is a local-first Windows foundation for an AI UGC clipper. Phase 1 provides a real Next.js-to-FastAPI connection, safe local storage initialization, capability reporting, and development tooling. It does not upload, process, analyse, render, import, or download video.
+HookCut is a local-first Windows AI UGC clipper. Phase 2 adds real local video intake: streamed upload, SQLite metadata records, ffprobe validation, and safe deletion. It does not transcribe, analyse, select, render, subtitle, import, track faces, or authenticate users.
 
 ## Windows quick start
 
@@ -14,6 +14,7 @@ npm --prefix apps/web install
 python -m venv apps/api/.venv
 apps\api\.venv\Scripts\python.exe -m pip install --upgrade pip
 apps\api\.venv\Scripts\python.exe -m pip install -e "apps/api[dev]"
+npm run db:migrate
 ```
 
 Copy `.env.example` files only when you need local configuration; never commit a real `.env` file. Leave `OPENAI_API_KEY` empty during Phase 1.
@@ -30,6 +31,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stop-dev.ps1
 - Web: `http://127.0.0.1:3000`
 - API health: `http://127.0.0.1:8000/api/health`
 - API capabilities: `http://127.0.0.1:8000/api/system/capabilities`
+
+## Local uploads
+
+`POST /api/videos/upload` accepts MP4, MOV, MKV, and WebM uploads up to 4 GB. The API streams files in bounded chunks to `storage/uploads`, validates the actual container and streams with ffprobe, and accepts only media with video, usable audio, 20 seconds to 2 hours duration, and no dimension above 3840 pixels. Rejected and cancelled uploads are removed safely. `GET /api/videos`, `GET /api/videos/{id}`, and `DELETE /api/videos/{id}` return only safe metadata; the stored filename and local paths remain private.
 
 ## Checks
 

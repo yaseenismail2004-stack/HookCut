@@ -1,12 +1,12 @@
 # Loop State
 
-Last reviewed: 2026-07-29 (Phase 1 foundation verified)
+Last reviewed: 2026-07-29 (Phase 2 secure local video intake verified)
 Operating level: L1 assisted, report-only
 Pause state: active only when a human sets `loop-pause-all` below
 
 ## High Priority (waiting on human)
 
-- None. Phase 1 foundation is verified. Phase 2 requires separate authorization and must remain limited to real local upload, file validation, and ffprobe metadata extraction.
+- None. Phase 2 is limited to real local upload, file validation, ffprobe metadata extraction, metadata records, and safe deletion. Phase 3 remains unstarted.
 
 ## Watch List
 
@@ -23,6 +23,7 @@ Pause state: active only when a human sets `loop-pause-all` below
 - The project-local AI clip-selection skill suite, master schema, rubric, and text-based test cases are prepared. No application implementation, media fixtures, dependencies, or environment validation has started.
 - Windows environment validation passed on 2026-07-29. Node/npm, Python 3.12.10 with pip 25.0.1, Git identity, FFmpeg/ffprobe 8.1.2, H.264/AAC, required FFmpeg filters, hardware-encoder detection, project write cleanup, OpenAI-key presence, cloud connectivity, and 65.81 GB of project-drive free space passed. The real synthetic FFmpeg smoke test produced and verified a 1080x1920 H.264/AAC MP4, then cleaned its project-local temporary media.
 - Phase 1 foundation was implemented and verified: Next.js App Router frontend, FastAPI backend, real health/capabilities endpoints, storage-root enforcement, project-local development scripts, tests, lint, type checking, production build, and temporary integration smoke tests all passed. No AI, media processing, importing, rendering, subtitles, or authentication was implemented. No unattended automation was enabled.
+- Phase 2 was verified: SQLite `VideoAsset` records and an Alembic migration; streamed MP4/MOV/MKV/WebM intake; ffprobe stream/container/duration/resolution validation; and safe repeatable deletion. A synthetic 21-second H.264/AAC video was uploaded through the live API, its metadata retrieved, and its physical upload removed through the live delete endpoint. No Phase 3 work was started.
 
 ## Pause Flag
 

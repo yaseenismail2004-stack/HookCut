@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path, PurePath
+from uuid import uuid4
 
 
 REQUIRED_STORAGE_DIRECTORIES = (
@@ -47,3 +48,12 @@ class StorageService:
         if not candidate.is_relative_to(self._root):
             raise StoragePathError("Storage paths must remain below the configured storage root.")
         return candidate
+
+    def new_upload_path(self, extension: str) -> tuple[str, Path]:
+        stored_filename = f"{uuid4().hex}{extension.lower()}"
+        return stored_filename, self.resolve(PurePath("uploads") / stored_filename)
+
+    def remove_upload(self, stored_filename: str) -> None:
+        path = self.resolve(PurePath("uploads") / stored_filename)
+        if path.is_file():
+            path.unlink()

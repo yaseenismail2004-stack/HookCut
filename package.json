@@ -13,6 +13,7 @@
     "test:web": "npm --prefix apps/web run test",
     "test:api": "apps\\api\\.venv\\Scripts\\python.exe -m pytest apps\\api\\tests",
     "check:environment": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/check-environment.ps1",
-    "verify": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-foundation.ps1"
+    "verify": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-foundation.ps1",
+    "db:migrate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"Push-Location apps/api; .\\.venv\\Scripts\\python.exe -m alembic -c alembic.ini upgrade head; Pop-Location\""
   }
 }

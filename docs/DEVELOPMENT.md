@@ -9,6 +9,7 @@ npm --prefix apps/web install
 python -m venv apps/api/.venv
 apps\api\.venv\Scripts\python.exe -m pip install --upgrade pip
 apps\api\.venv\Scripts\python.exe -m pip install -e "apps/api[dev]"
+npm run db:migrate
 ```
 
 ## Run locally
@@ -33,4 +34,9 @@ npm run typecheck
 npm run test
 npm run build
 npm run verify
+npm run db:migrate
 ```
+
+## Video intake
+
+The browser sends the selected local file only after the user presses Upload. The API streams it in bounded chunks, performs extension/content-type checks, then validates real media structure with ffprobe. Supported containers are MP4, MOV, MKV, and WebM. The default limits are 4 GB, 20 seconds minimum, two hours maximum, 4K maximum dimension, and both video and usable audio streams. SQLite data and all media below `storage/` are local and ignored by Git.

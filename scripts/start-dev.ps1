@@ -35,6 +35,14 @@ if (-not $ApiOnly -and -not (Test-Path -LiteralPath $nextCli)) {
     throw "Frontend dependencies are missing. Run npm --prefix apps/web install first."
 }
 
+Push-Location $apiRoot
+try {
+    & $python -m alembic -c alembic.ini upgrade head
+    if ($LASTEXITCODE -ne 0) { throw "Database migration failed. The API was not started." }
+} finally {
+    Pop-Location
+}
+
 New-Item -ItemType Directory -Path $stateDirectory -Force | Out-Null
 $services = @()
 $apiProcess = Start-Process -FilePath $python -ArgumentList @('-m', 'uvicorn', 'hookcut_api.main:app', '--host', '127.0.0.1', '--port', '8000') -WorkingDirectory $apiRoot -PassThru

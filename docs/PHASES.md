@@ -11,6 +11,7 @@
 - real local video upload
 - file validation
 - ffprobe metadata extraction
+- verified streamed upload, SQLite metadata persistence, and safe deletion
 
 ## Phase 3 — Processing preparation
 

@@ -1,132 +1,99 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { ChangeEvent, DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
 type Locale = "en" | "ar";
-type ConnectionState = "checking" | "connected" | "disconnected";
+type UploadState = "idle" | "uploading" | "validating" | "success" | "rejected";
+type Video = { id: string; original_filename: string; file_size_bytes: number; container: string; duration_seconds: number; width: number; height: number; frame_rate: number; video_codec: string; audio_codec: string; status: string };
 
+const api = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+const allowed = [".mp4", ".mov", ".mkv", ".webm"];
 const copy = {
-  en: {
-    language: "العربية",
-    projectName: "HookCut",
-    description: "A local-first workspace for turning your own long-form video into real short-form clips.",
-    foundation: "Foundation",
-    phaseLabel: "Current phase",
-    backendLabel: "Backend connection",
-    checking: "Checking connection…",
-    connected: "Connected",
-    disconnected: "Disconnected",
-    retry: "Retry health check",
-    environmentLabel: "Environment readiness",
-    environmentValue: "Validated — safe to scaffold",
-    nextNote: "Video upload will be implemented in the next authorized phase.",
-  },
-  ar: {
-    language: "English",
-    projectName: "هوك كت",
-    description: "مساحة عمل محلية لتحويل فيديوهاتك الطويلة إلى مقاطع قصيرة حقيقية.",
-    foundation: "الأساس",
-    phaseLabel: "المرحلة الحالية",
-    backendLabel: "اتصال الخادم",
-    checking: "يتم التحقق من الاتصال…",
-    connected: "متصل",
-    disconnected: "غير متصل",
-    retry: "إعادة فحص الاتصال",
-    environmentLabel: "جاهزية البيئة",
-    environmentValue: "تم التحقق — جاهزة لبدء الأساس",
-    nextNote: "سيُنفّذ رفع الفيديو في المرحلة المصرّح بها التالية.",
-  },
+  en: { title: "HookCut", language: "العربية", choose: "Choose video", upload: "Upload and validate", cancel: "Cancel upload", retry: "Try again", reset: "Reset", ready: "Ready", validating: "Validating media…", drop: "Drop a local video here or choose a file", note: "MP4, MOV, MKV, or WebM · up to 4 GB", next: "Video is ready for the next phase: audio extraction and transcription.", delete: "Delete video", confirm: "Permanently delete this video?", yes: "Delete", no: "Cancel", connected: "Backend connected", disconnected: "Backend disconnected", retryHealth: "Retry health check" },
+  ar: { title: "هوك كت", language: "English", choose: "اختر فيديو", upload: "ارفع وتحقق", cancel: "إلغاء الرفع", retry: "حاول مجدداً", reset: "إعادة تعيين", ready: "جاهز", validating: "يتم التحقق من الوسائط…", drop: "اسحب فيديو محلياً هنا أو اختر ملفاً", note: "MP4 أو MOV أو MKV أو WebM · حتى 4GB", next: "الفيديو جاهز للمرحلة القادمة: استخراج الصوت والتفريغ.", delete: "حذف الفيديو", confirm: "هل تريد حذف هذا الفيديو نهائياً؟", yes: "حذف", no: "إلغاء", connected: "الخادم متصل", disconnected: "الخادم غير متصل", retryHealth: "أعد فحص الخادم" },
 } as const;
-
-const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000").replace(/\/$/, "");
+const errors: Record<string, Record<Locale, string>> = {
+  unsupported_format: { en: "Unsupported video format.", ar: "صيغة الفيديو غير مدعومة." },
+  file_too_large: { en: "File exceeds the upload limit.", ar: "حجم الملف يتجاوز حد الرفع." },
+  video_too_short: { en: "Video must be at least 20 seconds.", ar: "يجب أن تكون مدة الفيديو 20 ثانية على الأقل." },
+  video_too_long: { en: "Video exceeds the maximum duration.", ar: "مدة الفيديو تتجاوز الحد الأقصى." },
+  resolution_too_high: { en: "Video resolution exceeds 4K.", ar: "دقة الفيديو تتجاوز 4K." },
+  missing_video_stream: { en: "Video stream is missing.", ar: "مسار الفيديو مفقود." },
+  missing_audio_stream: { en: "Usable audio stream is missing.", ar: "مسار صوت صالح مفقود." },
+  corrupt_media: { en: "Media cannot be read.", ar: "لا يمكن قراءة الوسائط." },
+  upload_cancelled: { en: "Upload was cancelled.", ar: "تم إلغاء الرفع." },
+  storage_error: { en: "Local storage failed.", ar: "فشل التخزين المحلي." },
+  validation_timeout: { en: "Validation timed out.", ar: "انتهت مهلة التحقق." },
+};
 
 export function FoundationDashboard() {
   const [locale, setLocale] = useState<Locale>("en");
-  const [connection, setConnection] = useState<ConnectionState>("checking");
-  const text = copy[locale];
+  const [connected, setConnected] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [state, setState] = useState<UploadState>("idle");
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [video, setVideo] = useState<Video | null>(null);
+  const [confirm, setConfirm] = useState(false);
+  const xhr = useRef<XMLHttpRequest | null>(null);
+  const t = copy[locale];
 
-  const checkHealth = useCallback(async () => {
+  const health = useCallback(async () => {
     try {
-      const response = await fetch(`${apiBaseUrl}/api/health`, { cache: "no-store" });
-      const payload: unknown = await response.json();
-      const isHealthy =
-        response.ok &&
-        typeof payload === "object" &&
-        payload !== null &&
-        "status" in payload &&
-        "service" in payload &&
-        payload.status === "ok" &&
-        payload.service === "hookcut-api";
-      setConnection(isHealthy ? "connected" : "disconnected");
-    } catch {
-      setConnection("disconnected");
-    }
+      const response = await fetch(`${api}/api/health`, { cache: "no-store" });
+      const payload = await response.json();
+      setConnected(response.ok && payload.status === "ok" && payload.service === "hookcut-api");
+    } catch { setConnected(false); }
   }, []);
-
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void checkHealth();
-    }, 0);
+    const timer = window.setTimeout(() => { void health(); }, 0);
     return () => window.clearTimeout(timer);
-  }, [checkHealth]);
+  }, [health]);
 
-  const retryHealth = () => {
-    setConnection("checking");
-    void checkHealth();
+  const select = (candidate: File | undefined) => {
+    if (!candidate) return;
+    const extension = `.${candidate.name.split(".").pop()?.toLowerCase()}`;
+    setVideo(null); setError(null); setProgress(0);
+    if (!allowed.includes(extension) || candidate.size > 4 * 1024 * 1024 * 1024) {
+      setFile(null); setState("rejected"); setError(!allowed.includes(extension) ? "unsupported_format" : "file_too_large"); return;
+    }
+    setFile(candidate); setState("idle");
   };
+  const upload = () => {
+    if (!file) return;
+    const request = new XMLHttpRequest(); xhr.current = request;
+    setState("uploading"); setProgress(0); setError(null);
+    request.open("POST", `${api}/api/videos/upload`);
+    request.upload.onprogress = (event) => { if (event.lengthComputable) setProgress(Math.round((event.loaded / event.total) * 100)); };
+    request.upload.onload = () => { if (request.status === 201) setState("validating"); };
+    request.upload.onabort = () => { setState("rejected"); setError("upload_cancelled"); };
+    request.upload.onloadend = () => {
+      if (request.status === 0) return;
+      if (request.status >= 200 && request.status < 300) { setVideo(JSON.parse(request.responseText) as Video); setState("success"); return; }
+      try { setError((JSON.parse(request.responseText) as { detail: { code: string } }).detail.code); } catch { setError("storage_error"); }
+      setState("rejected");
+    };
+    const data = new FormData(); data.append("file", file); request.send(data);
+  };
+  const reset = () => { xhr.current?.abort(); xhr.current = null; setFile(null); setVideo(null); setError(null); setProgress(0); setState("idle"); };
+  const deleteVideo = async () => {
+    if (!video) return;
+    const response = await fetch(`${api}/api/videos/${video.id}`, { method: "DELETE" });
+    if (response.ok) reset(); else setError("storage_error");
+    setConfirm(false);
+  };
+  const message = error ? (errors[error]?.[locale] ?? errors.storage_error[locale]) : null;
 
-  const connectionLabel = connection === "connected" ? text.connected : connection === "disconnected" ? text.disconnected : text.checking;
-  const statusClass = connection === "connected" ? "bg-emerald-500" : connection === "disconnected" ? "bg-rose-500" : "bg-amber-400";
-
-  return (
-    <main dir={locale === "ar" ? "rtl" : "ltr"} lang={locale} className="min-h-screen px-5 py-6 sm:px-8 lg:px-12">
-      <div className="mx-auto flex min-h-[calc(100vh-3rem)] max-w-5xl flex-col rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-2xl shadow-black/5 sm:p-10">
-        <header className="flex items-center justify-between gap-4">
-          <p className="text-sm font-semibold tracking-[0.2em] text-[var(--accent)]">HOOKCUT / 01</p>
-          <button
-            type="button"
-            onClick={() => setLocale((current) => (current === "en" ? "ar" : "en"))}
-            className="rounded-full border border-[var(--line)] px-4 py-2 text-sm font-semibold transition hover:border-[var(--accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-          >
-            {text.language}
-          </button>
-        </header>
-
-        <section className="flex flex-1 flex-col justify-center py-16 sm:py-24">
-          <p className="mb-4 text-sm font-semibold uppercase tracking-[0.18em] text-[var(--muted)]">{text.phaseLabel}</p>
-          <h1 className="max-w-3xl text-5xl font-black tracking-tight sm:text-7xl">{text.projectName}</h1>
-          <p className="mt-6 max-w-2xl text-lg leading-8 text-[var(--muted)] sm:text-xl">{text.description}</p>
-          <div className="mt-10 grid max-w-3xl gap-4 sm:grid-cols-3">
-            <StatusCard label={text.phaseLabel} value={text.foundation} />
-            <StatusCard label={text.environmentLabel} value={text.environmentValue} />
-            <div className="rounded-2xl border border-[var(--line)] p-5">
-              <p className="text-sm text-[var(--muted)]">{text.backendLabel}</p>
-              <div className="mt-3 flex items-center gap-2 font-semibold" aria-live="polite">
-                <span className={`h-2.5 w-2.5 rounded-full ${statusClass}`} aria-hidden="true" />
-                <span>{connectionLabel}</span>
-              </div>
-              <button
-                type="button"
-                onClick={retryHealth}
-                className="mt-4 text-sm font-semibold text-[var(--accent)] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-              >
-                {text.retry}
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <footer className="border-t border-[var(--line)] pt-6 text-sm leading-6 text-[var(--muted)]">{text.nextNote}</footer>
-      </div>
-    </main>
-  );
-}
-
-function StatusCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-[var(--line)] p-5">
-      <p className="text-sm text-[var(--muted)]">{label}</p>
-      <p className="mt-3 font-semibold leading-6">{value}</p>
-    </div>
-  );
+  return <main dir={locale === "ar" ? "rtl" : "ltr"} lang={locale} className="min-h-screen p-5 sm:p-10">
+    <section className="mx-auto max-w-3xl rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-6 shadow-xl">
+      <header className="flex items-center justify-between gap-4"><div><p className="text-sm text-[var(--accent)]">HOOKCUT / PHASE 2</p><h1 className="text-4xl font-bold">{t.title}</h1></div><button type="button" onClick={() => setLocale(locale === "en" ? "ar" : "en")} className="rounded border p-2">{t.language}</button></header>
+      <p className="mt-4 text-sm" aria-live="polite">{connected ? t.connected : t.disconnected} <button type="button" onClick={() => void health()} aria-label={t.retryHealth} className="underline">↻</button></p>
+      {!video && <div className="mt-8"><label onDrop={(event: DragEvent) => { event.preventDefault(); select(event.dataTransfer.files[0]); }} onDragOver={(event) => event.preventDefault()} className="block rounded-2xl border-2 border-dashed border-[var(--line)] p-10 text-center"><input aria-label={t.choose} type="file" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" className="sr-only" onChange={(event: ChangeEvent<HTMLInputElement>) => select(event.target.files?.[0])}/><span>{file ? file.name : t.drop}</span><small className="mt-2 block text-[var(--muted)]">{t.note}</small></label>
+        {file && <p className="mt-3 break-all text-sm">{file.name} · {(file.size / 1024 / 1024).toFixed(1)} MB</p>}
+        {state === "uploading" && <><progress className="mt-4 w-full" value={progress} max="100" aria-label="Upload progress" />{progress}%</>}{state === "validating" && <p className="mt-4">{t.validating}</p>}{message && <p role="alert" className="mt-4 text-rose-500">{message}</p>}
+        <div className="mt-5 flex flex-wrap gap-3">{file && state !== "uploading" && state !== "validating" && <button type="button" onClick={upload} className="rounded bg-[var(--accent)] px-4 py-2 text-white">{state === "rejected" ? t.retry : t.upload}</button>}{state === "uploading" && <button type="button" onClick={() => xhr.current?.abort()} className="rounded border px-4 py-2">{t.cancel}</button>}{(file || state === "rejected") && state !== "uploading" && <button type="button" onClick={reset} className="rounded border px-4 py-2">{t.reset}</button>}</div></div>}
+      {video && <section className="mt-8 rounded-2xl border border-emerald-500/40 p-5"><h2 className="text-xl font-bold">{t.ready}</h2><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt>File</dt><dd className="break-all">{video.original_filename}</dd></div><div><dt>Size</dt><dd>{(video.file_size_bytes / 1024 / 1024).toFixed(1)} MB</dd></div><div><dt>Duration</dt><dd>{video.duration_seconds.toFixed(2)} s</dd></div><div><dt>Video</dt><dd>{video.width}×{video.height} · {video.frame_rate} fps</dd></div><div><dt>Container</dt><dd>{video.container}</dd></div><div><dt>Codecs</dt><dd>{video.video_codec} / {video.audio_codec}</dd></div></dl><p className="mt-5">{t.next}</p><button type="button" onClick={() => setConfirm(true)} className="mt-5 rounded border border-rose-500 px-4 py-2 text-rose-500">{t.delete}</button></section>}
+      {confirm && <div role="dialog" aria-modal="true" className="mt-5 rounded border p-4"><p>{t.confirm}</p><button type="button" onClick={() => void deleteVideo()} className="mt-3 rounded bg-rose-600 px-3 py-2 text-white">{t.yes}</button><button type="button" onClick={() => setConfirm(false)} className="m-3 underline">{t.no}</button></div>}
+    </section>
+  </main>;
 }

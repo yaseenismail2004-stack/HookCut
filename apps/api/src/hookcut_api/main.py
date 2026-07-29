@@ -7,7 +7,9 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from hookcut_api.config import Settings, get_settings
+from hookcut_api.db import create_session_factory
 from hookcut_api.dependencies import get_storage_service
+from hookcut_api.routers.videos import router as videos_router
 from hookcut_api.schemas import CapabilitiesResponse, HealthResponse
 from hookcut_api.services.capabilities import detect_capabilities
 from hookcut_api.services.storage import StorageService
@@ -21,6 +23,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         storage = StorageService(configured_settings.resolved_storage_root)
         storage.initialize()
         app.state.storage = storage
+        app.state.settings = configured_settings
+        app.state.session_factory = create_session_factory(configured_settings)
         yield
 
     app = FastAPI(title="HookCut API", version=configured_settings.app_version, lifespan=lifespan)
@@ -28,7 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=[configured_settings.web_origin],
         allow_credentials=False,
-        allow_methods=["GET"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Content-Type"],
     )
 
@@ -40,6 +44,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def capabilities(storage: StorageService = Depends(get_storage_service)) -> CapabilitiesResponse:
         return detect_capabilities(configured_settings, storage)
 
+    app.include_router(videos_router)
     return app
 
 

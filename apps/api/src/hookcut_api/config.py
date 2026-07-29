@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     max_video_duration_seconds: PositiveInt = 7200
     max_ai_cost_per_video_hour_usd: PositiveFloat = 1.5
     openai_api_key: str | None = None
-    database_url: str | None = None
+    database_url: str = "sqlite:///storage/hookcut.db"
 
     @property
     def resolved_storage_root(self) -> Path:
@@ -32,6 +32,16 @@ class Settings(BaseSettings):
         if not candidate.is_absolute():
             candidate = PROJECT_ROOT / candidate
         return candidate.resolve()
+
+    @property
+    def resolved_database_url(self) -> str:
+        prefix = "sqlite:///"
+        if not self.database_url.startswith(prefix) or self.database_url.startswith("sqlite:////"):
+            return self.database_url
+        database_path = Path(self.database_url.removeprefix(prefix))
+        if database_path.is_absolute():
+            return self.database_url
+        return f"{prefix}{(PROJECT_ROOT / database_path).resolve().as_posix()}"
 
 
 @lru_cache
